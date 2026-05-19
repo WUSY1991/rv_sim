@@ -1,0 +1,16 @@
+# 编译产物
+*.o
+rv_sim
+rv_sim_debug
+test_simple
+tests/test_m
+tests/test_f
+tests/test_a
+tests/test_base
+
+# 测试二进制
+*.bin
+!test_fpu.bin
+
+# 调试文件
+*.dSYM/
