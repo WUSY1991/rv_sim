@@ -30,7 +30,7 @@ $(TARGET): $(OBJS)
 
 # 清理
 clean:
-	rm -f $(TARGET) output/*.o *.bin
+	rm -rf $(TARGET) output/*
 
 # 运行测试
 run: $(TARGET)
