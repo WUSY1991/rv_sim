@@ -183,8 +183,12 @@ uint32_t expand_compressed(uint16_t instr) {
                     return make_i_type(OP_OP_IMM, rd_prime, 0, 2, decode_c_addi4spn_imm(instr));
                 case 0x2:  /* C.LW */
                     return make_i_type(OP_LOAD, rd_prime, 2, rs1_prime, decode_c_lw_imm(instr));
+                case 0x3:  /* C.FLW (RV32FC) */
+                    return make_i_type(OP_LOAD_FP, rd_prime, 2, rs1_prime, decode_c_lw_imm(instr));
                 case 0x6:  /* C.SW */
                     return make_s_type(OP_STORE, rs1_prime, rs2_prime, 2, decode_c_lw_imm(instr));
+                case 0x7:  /* C.FSW (RV32FC) */
+                    return make_s_type(OP_STORE_FP, rs1_prime, rs2_prime, 2, decode_c_lw_imm(instr));
                 default:
                     return 0;
             }
@@ -270,6 +274,8 @@ uint32_t expand_compressed(uint16_t instr) {
                     }
                 case 0x2:  /* C.LWSP */
                     return make_i_type(OP_LOAD, rd, 2, 2, decode_c_lwsp_imm(instr));
+                case 0x3:  /* C.FLWSP (RV32FC) */
+                    return make_i_type(OP_LOAD_FP, rd, 2, 2, decode_c_lwsp_imm(instr));
                 case 0x4:  /* C.JR / C.MV */
                     if (rs2 == 0) {  /* C.JR */
                         return make_i_type(OP_JALR, 0, 0, rd, 0);
@@ -286,6 +292,8 @@ uint32_t expand_compressed(uint16_t instr) {
                     return make_i_type(OP_JALR, 1, 0, rd, 0);
                 case 0x6:  /* C.SWSP */
                     return make_s_type(OP_STORE, 2, rs2, 2, decode_c_swsp_imm(instr));
+                case 0x7:  /* C.FSWSP (RV32FC) */
+                    return make_s_type(OP_STORE_FP, 2, rs2, 2, decode_c_swsp_imm(instr));
                 default:
                     return 0;
             }

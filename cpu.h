@@ -8,7 +8,11 @@
 
 #include <stdint.h>
 
-#define MEM_SIZE (1024 * 1024)
+/* ========== 可配置参数 ========== */
+#define MEM_BASE_ADDR   0x1000000   /* 内存基地址 */
+#define MEM_SIZE        (1024 * 1024)  /* 内存大小 */
+#define PC_RESET_ADDR   0x1000080   /* PC 复位地址 */
+
 #define NUM_REGS 32
 #define NUM_FREGS 32
 

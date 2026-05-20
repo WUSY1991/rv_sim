@@ -26,7 +26,7 @@ int is_compressed(uint16_t instr_low) {
  * 返回：32 位指令（压缩指令会扩展为等效的 32 位格式），如果 PC 超出内存范围返回 0
  */
 uint32_t cpu_fetch(CPU *cpu, int *instr_len) {
-    uint32_t fetch_addr = cpu->pc-0x1000000;
+    uint32_t fetch_addr = cpu->pc - MEM_BASE_ADDR;
 
     /* 检查 PC 是否越界 */
     if (fetch_addr >= MEM_SIZE) {

@@ -30,7 +30,7 @@ void cpu_init(CPU *cpu) {
     memset(cpu->memory, 0, sizeof(cpu->memory));
 
     /* 初始化 PC */
-    cpu->pc = 0x1000080;
+    cpu->pc = PC_RESET_ADDR;
 
     /* 清零 FCSR */
     cpu->fcsr = 0;
@@ -61,8 +61,16 @@ int cpu_load_program(CPU *cpu, const uint32_t *program, size_t size) {
         return -1;
     }
 
-    /* 按字节复制，处理非对齐大小 */
-    memcpy(cpu->memory, program, size);
+    // /* 计算加载地址 (相对于内存基地址) */
+    // uint32_t load_offset = cpu->pc - MEM_BASE_ADDR;
+    // if (load_offset + size > MEM_SIZE) {
+    //     fprintf(stderr, "[CPU] 程序超出内存范围\n");
+    //     return -1;
+    // }
+    uint32_t load_offset =0;
+
+    /* 按字节复制到 PC 对应位置 */
+    memcpy((uint8_t*)cpu->memory + load_offset, program, size);
 
     return 0;
 }

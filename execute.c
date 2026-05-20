@@ -538,7 +538,7 @@ int cpu_execute(CPU *cpu, uint32_t instr, int instr_len) {
         /* ==================== STORE (0x23) ==================== */
         case OP_STORE:
             {
-                int32_t imm = decode_store_imm(instr);
+                int32_t imm = decode_store_imm(expanded_instr);
                 uint32_t addr = cpu->regs[s_inst.rs1] + imm;
                 if (addr < MEM_SIZE) {
                     uint32_t val = cpu->regs[s_inst.rs2];
@@ -564,7 +564,7 @@ int cpu_execute(CPU *cpu, uint32_t instr, int instr_len) {
         /* ==================== BRANCH (0x63) ==================== */
         case OP_BRANCH:
             {
-                int32_t imm = decode_branch_imm(instr);
+                int32_t imm = decode_branch_imm(expanded_instr);
                 int32_t rs1 = (int32_t)cpu->regs[s_inst.rs1];
                 int32_t rs2 = (int32_t)cpu->regs[s_inst.rs2];
                 int taken = 0;
@@ -660,7 +660,7 @@ int cpu_execute(CPU *cpu, uint32_t instr, int instr_len) {
         /* ==================== F 扩展 - STORE_FP (0x27) ==================== */
         case OP_STORE_FP:
             {
-                int32_t imm = decode_store_imm(instr);
+                int32_t imm = decode_store_imm(expanded_instr);
                 uint32_t addr = cpu->regs[s_inst.rs1] + imm;
                 if (addr < MEM_SIZE)
                     cpu->memory[addr / 4] = cpu->fregs[s_inst.rs2].u;
