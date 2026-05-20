@@ -26,10 +26,10 @@ int is_compressed(uint16_t instr_low) {
  * 返回：32 位指令（压缩指令会扩展为等效的 32 位格式），如果 PC 超出内存范围返回 0
  */
 uint32_t cpu_fetch(CPU *cpu, int *instr_len) {
-    uint32_t fetch_addr = cpu->pc - MEM_BASE_ADDR;
+    uint32_t fetch_addr = cpu->pc - IMEM_BASE_ADDR;
 
     /* 检查 PC 是否越界 */
-    if (fetch_addr >= MEM_SIZE) {
+    if (fetch_addr >= IMEM_SIZE) {
         fprintf(stderr, "[FETCH] PC 越界：0x%08x\n", cpu->pc);
         return 0;
     }
@@ -40,9 +40,9 @@ uint32_t cpu_fetch(CPU *cpu, int *instr_len) {
         return 0;
     }
 
-    /* 从内存中读取指令低 16 位 */
+    /* 从指令内存中读取指令低 16 位 */
     /* 内存按 32 位字存储，需要处理半字访问 */
-    uint32_t word = cpu->memory[fetch_addr / 4];
+    uint32_t word = cpu->imem[fetch_addr / 4];
     uint16_t instr_low;
 
     /* 根据地址确定取低半字还是高半字 */
@@ -72,8 +72,8 @@ uint32_t cpu_fetch(CPU *cpu, int *instr_len) {
             return instr_low | (instr_high << 16);
         } else {
             /* 从半字边界开始，需要组合两个半字 */
-            if (fetch_addr + 2 < MEM_SIZE) {
-                uint32_t next_word = cpu->memory[(fetch_addr + 2) / 4];
+            if (fetch_addr + 2 < IMEM_SIZE) {
+                uint32_t next_word = cpu->imem[(fetch_addr + 2) / 4];
                 instr_high = next_word & 0xFFFF;
                 return instr_low | (instr_high << 16);
             }

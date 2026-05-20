@@ -12,6 +12,88 @@ extern int32_t decode_branch_imm(uint32_t instr);
 extern int32_t decode_jal_imm(uint32_t instr);
 extern int32_t decode_store_imm(uint32_t instr);
 
+/* ==================== UART 虚拟串口 ==================== */
+
+/**
+ * uart_write_tx - UART 发送字符
+ * @cpu: CPU 状态结构体指针
+ * @value: 要发送的字符
+ */
+static void uart_write_tx(CPU *cpu, uint8_t value) {
+    cpu->uart_tx_char = value;
+    cpu->uart_tx_ready = 1;
+    /* 发送字符到控制台 */
+    putchar(value);
+    fflush(stdout);
+}
+
+/**
+ * uart_read_rx - UART 接收字符
+ * @cpu: CPU 状态结构体指针
+ *
+ * 返回：接收到的字符（如果没有数据返回 0）
+ */
+static uint8_t uart_read_rx(CPU *cpu) {
+    if (cpu->uart_rx_valid) {
+        cpu->uart_rx_valid = 0;
+        return cpu->uart_rx_char;
+    }
+    return 0;
+}
+
+/* ==================== 内存访问辅助函数 ==================== */
+
+/**
+ * dmem_read - 从数据内存读取
+ * @cpu: CPU 状态结构体指针
+ * @addr: 物理地址
+ * @size: 访问大小 (1=字节, 2=半字, 4=字)
+ *
+ * 返回：读取的数据
+ */
+static uint32_t dmem_read(CPU *cpu, uint32_t addr, int size) {
+    uint32_t dmem_addr = addr - DMEM_BASE_ADDR;
+    if (dmem_addr >= DMEM_SIZE) return 0;
+
+    uint32_t word = cpu->dmem[dmem_addr / 4];
+    uint32_t offset = (dmem_addr % 4) * 8;
+
+    switch (size) {
+        case 1: return (word >> offset) & 0xFF;
+        case 2: return (word >> offset) & 0xFFFF;
+        case 4: return word;
+        default: return 0;
+    }
+}
+
+/**
+ * dmem_write - 向数据内存写入
+ * @cpu: CPU 状态结构体指针
+ * @addr: 物理地址
+ * @value: 要写入的数据
+ * @size: 访问大小 (1=字节, 2=半字, 4=字)
+ */
+static void dmem_write(CPU *cpu, uint32_t addr, uint32_t value, int size) {
+    uint32_t dmem_addr = addr - DMEM_BASE_ADDR;
+    if (dmem_addr >= DMEM_SIZE) return;
+
+    uint32_t offset = (dmem_addr % 4) * 8;
+
+    switch (size) {
+        case 1:
+            cpu->dmem[dmem_addr / 4] &= ~(0xFF << offset);
+            cpu->dmem[dmem_addr / 4] |= (value & 0xFF) << offset;
+            break;
+        case 2:
+            cpu->dmem[dmem_addr / 4] &= ~(0xFFFF << offset);
+            cpu->dmem[dmem_addr / 4] |= (value & 0xFFFF) << offset;
+            break;
+        case 4:
+            cpu->dmem[dmem_addr / 4] = value;
+            break;
+    }
+}
+
 /* ==================== M 扩展 (乘除) ==================== */
 
 static void exec_mul(CPU *cpu, RType *r) {
@@ -73,50 +155,58 @@ static void exec_remu(CPU *cpu, RType *r) {
 
 static void exec_lr_w(CPU *cpu, RType *r) {
     uint32_t addr = cpu->regs[r->rs1];
-    if (addr >= MEM_SIZE) return;
-    cpu->regs[r->rd] = cpu->memory[addr / 4];
-    cpu->has_reservation = 1;
-    cpu->reservation_addr = addr;
+
+    /* 数据内存 (DMEM) */
+    if (addr >= DMEM_BASE_ADDR && addr < DMEM_BASE_ADDR + DMEM_SIZE) {
+        cpu->regs[r->rd] = dmem_read(cpu, addr, 4);
+        cpu->has_reservation = 1;
+        cpu->reservation_addr = addr;
+    }
 }
 
 static void exec_sc_w(CPU *cpu, RType *r) {
     uint32_t addr = cpu->regs[r->rs1];
-    if (addr >= MEM_SIZE) {
-        cpu->regs[r->rd] = 1;
-        return;
-    }
-    if (cpu->has_reservation && cpu->reservation_addr == addr) {
-        cpu->memory[addr / 4] = cpu->regs[r->rs2];
-        cpu->regs[r->rd] = 0;
+
+    /* 数据内存 (DMEM) */
+    if (addr >= DMEM_BASE_ADDR && addr < DMEM_BASE_ADDR + DMEM_SIZE) {
+        if (cpu->has_reservation && cpu->reservation_addr == addr) {
+            dmem_write(cpu, addr, cpu->regs[r->rs2], 4);
+            cpu->regs[r->rd] = 0;
+        } else {
+            cpu->regs[r->rd] = 1;
+        }
+        cpu->has_reservation = 0;
     } else {
         cpu->regs[r->rd] = 1;
     }
-    cpu->has_reservation = 0;
 }
 
 static void exec_amo(CPU *cpu, RType *r, uint32_t funct5) {
     uint32_t addr = cpu->regs[r->rs1];
-    if (addr >= MEM_SIZE) return;
-    
-    uint32_t *mem_loc = &cpu->memory[addr / 4];
-    uint32_t old_val = *mem_loc;
-    uint32_t new_val;
-    
-    switch (funct5) {
-        case 0x01: new_val = cpu->regs[r->rs2]; break;  /* AMOSWAP */
-        case 0x00: new_val = old_val + cpu->regs[r->rs2]; break;  /* AMOADD */
-        case 0x04: new_val = old_val ^ cpu->regs[r->rs2]; break;  /* AMOXOR */
-        case 0x0C: new_val = old_val & cpu->regs[r->rs2]; break;  /* AMOAND */
-        case 0x08: new_val = old_val | cpu->regs[r->rs2]; break;  /* AMOOR */
-        case 0x10: new_val = ((int32_t)old_val < (int32_t)cpu->regs[r->rs2]) ? old_val : cpu->regs[r->rs2]; break;  /* AMOMIN */
-        case 0x14: new_val = ((int32_t)old_val > (int32_t)cpu->regs[r->rs2]) ? old_val : cpu->regs[r->rs2]; break;  /* AMOMAX */
-        case 0x18: new_val = (old_val < cpu->regs[r->rs2]) ? old_val : cpu->regs[r->rs2]; break;  /* AMOMINU */
-        case 0x1C: new_val = (old_val > cpu->regs[r->rs2]) ? old_val : cpu->regs[r->rs2]; break;  /* AMOMAXU */
-        default: new_val = old_val; break;
+
+    /* 数据内存 (DMEM) */
+    if (addr >= DMEM_BASE_ADDR && addr < DMEM_BASE_ADDR + DMEM_SIZE) {
+        uint32_t dmem_addr = addr - DMEM_BASE_ADDR;
+        uint32_t *mem_loc = &cpu->dmem[dmem_addr / 4];
+        uint32_t old_val = *mem_loc;
+        uint32_t new_val;
+
+        switch (funct5) {
+            case 0x01: new_val = cpu->regs[r->rs2]; break;  /* AMOSWAP */
+            case 0x00: new_val = old_val + cpu->regs[r->rs2]; break;  /* AMOADD */
+            case 0x04: new_val = old_val ^ cpu->regs[r->rs2]; break;  /* AMOXOR */
+            case 0x0C: new_val = old_val & cpu->regs[r->rs2]; break;  /* AMOAND */
+            case 0x08: new_val = old_val | cpu->regs[r->rs2]; break;  /* AMOOR */
+            case 0x10: new_val = ((int32_t)old_val < (int32_t)cpu->regs[r->rs2]) ? old_val : cpu->regs[r->rs2]; break;  /* AMOMIN */
+            case 0x14: new_val = ((int32_t)old_val > (int32_t)cpu->regs[r->rs2]) ? old_val : cpu->regs[r->rs2]; break;  /* AMOMAX */
+            case 0x18: new_val = (old_val < cpu->regs[r->rs2]) ? old_val : cpu->regs[r->rs2]; break;  /* AMOMINU */
+            case 0x1C: new_val = (old_val > cpu->regs[r->rs2]) ? old_val : cpu->regs[r->rs2]; break;  /* AMOMAXU */
+            default: new_val = old_val; break;
+        }
+
+        *mem_loc = new_val;
+        cpu->regs[r->rd] = old_val;
     }
-    
-    *mem_loc = new_val;
-    cpu->regs[r->rd] = old_val;
 }
 
 /* ==================== F 扩展 (浮点运算) ==================== */
@@ -510,24 +600,51 @@ int cpu_execute(CPU *cpu, uint32_t instr, int instr_len) {
         case OP_LOAD:
             {
                 uint32_t addr = cpu->regs[i_inst.rs1] + i_inst.imm;
-                if (addr < MEM_SIZE) {
+
+                /* UART 接收 */
+                if (addr == UART_RX_ADDR) {
+                    cpu->regs[i_inst.rd] = uart_read_rx(cpu);
+                }
+                /* 数据内存 (DMEM) */
+                else if (addr >= DMEM_BASE_ADDR && addr < DMEM_BASE_ADDR + DMEM_SIZE) {
+                    switch (funct3) {
+                        case 0x0:  /* LB */
+                            cpu->regs[i_inst.rd] = sign_extend(dmem_read(cpu, addr, 1), 8);
+                            break;
+                        case 0x1:  /* LH */
+                            cpu->regs[i_inst.rd] = sign_extend(dmem_read(cpu, addr, 2), 16);
+                            break;
+                        case 0x2:  /* LW */
+                            cpu->regs[i_inst.rd] = dmem_read(cpu, addr, 4);
+                            break;
+                        case 0x4:  /* LBU */
+                            cpu->regs[i_inst.rd] = dmem_read(cpu, addr, 1);
+                            break;
+                        case 0x5:  /* LHU */
+                            cpu->regs[i_inst.rd] = dmem_read(cpu, addr, 2);
+                            break;
+                    }
+                }
+                /* 指令内存 (IMEM) - 用于调试/读取指令 */
+                else if (addr >= IMEM_BASE_ADDR && addr < IMEM_BASE_ADDR + IMEM_SIZE) {
+                    uint32_t imem_addr = addr - IMEM_BASE_ADDR;
                     switch (funct3) {
                         case 0x0:  /* LB */
                             cpu->regs[i_inst.rd] = sign_extend(
-                                (cpu->memory[addr / 4] >> ((addr % 4) * 8)) & 0xFF, 8);
+                                (cpu->imem[imem_addr / 4] >> ((imem_addr % 4) * 8)) & 0xFF, 8);
                             break;
                         case 0x1:  /* LH */
                             cpu->regs[i_inst.rd] = sign_extend(
-                                (cpu->memory[addr / 4] >> ((addr % 4) * 8)) & 0xFFFF, 16);
+                                (cpu->imem[imem_addr / 4] >> ((imem_addr % 4) * 8)) & 0xFFFF, 16);
                             break;
                         case 0x2:  /* LW */
-                            cpu->regs[i_inst.rd] = cpu->memory[addr / 4];
+                            cpu->regs[i_inst.rd] = cpu->imem[imem_addr / 4];
                             break;
                         case 0x4:  /* LBU */
-                            cpu->regs[i_inst.rd] = (cpu->memory[addr / 4] >> ((addr % 4) * 8)) & 0xFF;
+                            cpu->regs[i_inst.rd] = (cpu->imem[imem_addr / 4] >> ((imem_addr % 4) * 8)) & 0xFF;
                             break;
                         case 0x5:  /* LHU */
-                            cpu->regs[i_inst.rd] = (cpu->memory[addr / 4] >> ((addr % 4) * 8)) & 0xFFFF;
+                            cpu->regs[i_inst.rd] = (cpu->imem[imem_addr / 4] >> ((imem_addr % 4) * 8)) & 0xFFFF;
                             break;
                     }
                 }
@@ -540,20 +657,41 @@ int cpu_execute(CPU *cpu, uint32_t instr, int instr_len) {
             {
                 int32_t imm = decode_store_imm(expanded_instr);
                 uint32_t addr = cpu->regs[s_inst.rs1] + imm;
-                if (addr < MEM_SIZE) {
-                    uint32_t val = cpu->regs[s_inst.rs2];
-                    uint32_t offset = (addr % 4) * 8;
+                uint32_t val = cpu->regs[s_inst.rs2];
+
+                /* UART 发送 */
+                if (addr == UART_TX_ADDR) {
+                    uart_write_tx(cpu, val & 0xFF);
+                }
+                /* 数据内存 (DMEM) */
+                else if (addr >= DMEM_BASE_ADDR && addr < DMEM_BASE_ADDR + DMEM_SIZE) {
                     switch (funct3) {
                         case 0x0:  /* SB */
-                            cpu->memory[addr / 4] &= ~(0xFF << offset);
-                            cpu->memory[addr / 4] |= (val & 0xFF) << offset;
+                            dmem_write(cpu, addr, val, 1);
                             break;
                         case 0x1:  /* SH */
-                            cpu->memory[addr / 4] &= ~(0xFFFF << offset);
-                            cpu->memory[addr / 4] |= (val & 0xFFFF) << offset;
+                            dmem_write(cpu, addr, val, 2);
                             break;
                         case 0x2:  /* SW */
-                            cpu->memory[addr / 4] = val;
+                            dmem_write(cpu, addr, val, 4);
+                            break;
+                    }
+                }
+                /* 指令内存 (IMEM) - 用于调试/修改指令 */
+                else if (addr >= IMEM_BASE_ADDR && addr < IMEM_BASE_ADDR + IMEM_SIZE) {
+                    uint32_t imem_addr = addr - IMEM_BASE_ADDR;
+                    uint32_t offset = (imem_addr % 4) * 8;
+                    switch (funct3) {
+                        case 0x0:  /* SB */
+                            cpu->imem[imem_addr / 4] &= ~(0xFF << offset);
+                            cpu->imem[imem_addr / 4] |= (val & 0xFF) << offset;
+                            break;
+                        case 0x1:  /* SH */
+                            cpu->imem[imem_addr / 4] &= ~(0xFFFF << offset);
+                            cpu->imem[imem_addr / 4] |= (val & 0xFFFF) << offset;
+                            break;
+                        case 0x2:  /* SW */
+                            cpu->imem[imem_addr / 4] = val;
                             break;
                     }
                 }
@@ -651,19 +789,40 @@ int cpu_execute(CPU *cpu, uint32_t instr, int instr_len) {
         case OP_LOAD_FP:
             {
                 uint32_t addr = cpu->regs[i_inst.rs1] + i_inst.imm;
-                if (addr < MEM_SIZE)
-                    cpu->fregs[i_inst.rd].u = cpu->memory[addr / 4];
+
+                /* 数据内存 (DMEM) */
+                if (addr >= DMEM_BASE_ADDR && addr < DMEM_BASE_ADDR + DMEM_SIZE) {
+                    cpu->fregs[i_inst.rd].u = dmem_read(cpu, addr, 4);
+                }
+                /* 指令内存 (IMEM) - 用于调试 */
+                else if (addr >= IMEM_BASE_ADDR && addr < IMEM_BASE_ADDR + IMEM_SIZE) {
+                    uint32_t imem_addr = addr - IMEM_BASE_ADDR;
+                    cpu->fregs[i_inst.rd].u = cpu->imem[imem_addr / 4];
+                }
             }
             cpu->pc += actual_len;
             break;
-            
+
         /* ==================== F 扩展 - STORE_FP (0x27) ==================== */
         case OP_STORE_FP:
             {
                 int32_t imm = decode_store_imm(expanded_instr);
                 uint32_t addr = cpu->regs[s_inst.rs1] + imm;
-                if (addr < MEM_SIZE)
-                    cpu->memory[addr / 4] = cpu->fregs[s_inst.rs2].u;
+                uint32_t val = cpu->fregs[s_inst.rs2].u;
+
+                /* UART 发送 (浮点寄存器写入也支持 UART) */
+                if (addr == UART_TX_ADDR) {
+                    uart_write_tx(cpu, val & 0xFF);
+                }
+                /* 数据内存 (DMEM) */
+                else if (addr >= DMEM_BASE_ADDR && addr < DMEM_BASE_ADDR + DMEM_SIZE) {
+                    dmem_write(cpu, addr, val, 4);
+                }
+                /* 指令内存 (IMEM) - 用于调试 */
+                else if (addr >= IMEM_BASE_ADDR && addr < IMEM_BASE_ADDR + IMEM_SIZE) {
+                    uint32_t imem_addr = addr - IMEM_BASE_ADDR;
+                    cpu->imem[imem_addr / 4] = val;
+                }
             }
             cpu->pc += actual_len;
             break;

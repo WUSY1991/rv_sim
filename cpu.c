@@ -26,8 +26,11 @@ void cpu_init(CPU *cpu) {
     /* 清零浮点寄存器 */
     memset(cpu->fregs, 0, sizeof(cpu->fregs));
 
-    /* 清零内存 */
-    memset(cpu->memory, 0, sizeof(cpu->memory));
+    /* 清零指令内存 (IMEM) */
+    memset(cpu->imem, 0, sizeof(cpu->imem));
+
+    /* 清零数据内存 (DMEM) */
+    memset(cpu->dmem, 0, sizeof(cpu->dmem));
 
     /* 初始化 PC */
     cpu->pc = PC_RESET_ADDR;
@@ -43,12 +46,18 @@ void cpu_init(CPU *cpu) {
     cpu->halted = 0;
     cpu->cycles = 0;
 
+    /* UART 初始化 */
+    cpu->uart_tx_char = 0;
+    cpu->uart_rx_char = 0;
+    cpu->uart_rx_valid = 0;
+    cpu->uart_tx_ready = 1;
+
     /* x0 硬连线为 0 */
     cpu->regs[0] = 0;
 }
 
 /**
- * cpu_load_program - 加载程序到内存
+ * cpu_load_program - 加载程序到指令内存
  * @cpu: CPU 状态结构体指针
  * @program: 程序数据指针
  * @size: 程序大小 (字节)
@@ -56,21 +65,15 @@ void cpu_init(CPU *cpu) {
  * 返回：0 表示成功，-1 表示失败
  */
 int cpu_load_program(CPU *cpu, const uint32_t *program, size_t size) {
-    if (size > MEM_SIZE) {
-        fprintf(stderr, "[CPU] 程序太大：%lu 字节 (最大 %d)\n", (unsigned long)size, MEM_SIZE);
+    if (size > IMEM_SIZE) {
+        fprintf(stderr, "[CPU] 程序太大：%lu 字节 (最大 %d)\n", (unsigned long)size, IMEM_SIZE);
         return -1;
     }
 
-    // /* 计算加载地址 (相对于内存基地址) */
-    // uint32_t load_offset = cpu->pc - MEM_BASE_ADDR;
-    // if (load_offset + size > MEM_SIZE) {
-    //     fprintf(stderr, "[CPU] 程序超出内存范围\n");
-    //     return -1;
-    // }
-    uint32_t load_offset =0;
 
-    /* 按字节复制到 PC 对应位置 */
-    memcpy((uint8_t*)cpu->memory + load_offset, program, size);
+
+    /* 按字节复制到指令内存 */
+    memcpy((uint8_t*)cpu->imem, program, size);
 
     return 0;
 }
@@ -94,8 +97,8 @@ int cpu_load_binary(CPU *cpu, const char *filename) {
     long size = ftell(f);
     fseek(f, 0, SEEK_SET);
 
-    if (size > MEM_SIZE) {
-        fprintf(stderr, "[CPU] 文件太大：%ld 字节\n", size);
+    if (size > IMEM_SIZE) {
+        fprintf(stderr, "[CPU] 文件太大：%ld 字节 (最大 %d)\n", size, IMEM_SIZE);
         fclose(f);
         return -1;
     }

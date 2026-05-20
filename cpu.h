@@ -9,9 +9,20 @@
 #include <stdint.h>
 
 /* ========== 可配置参数 ========== */
-#define MEM_BASE_ADDR   0x1000000   /* 内存基地址 */
-#define MEM_SIZE        (1024 * 1024)  /* 内存大小 */
+/* 指令内存 (IMEM) */
+#define IMEM_BASE_ADDR  0x1000000   /* 指令内存基地址 */
+#define IMEM_SIZE       (256 * 1024)  /* 指令内存大小 256KB */
+
+/* 数据内存 (DMEM) */
+#define DMEM_BASE_ADDR  0x20000     /* 数据内存基地址 */
+#define DMEM_SIZE       (256 * 1024)  /* 数据内存大小 256KB */
+
+/* PC 复位地址 */
 #define PC_RESET_ADDR   0x1000080   /* PC 复位地址 */
+
+/* ========== UART 虚拟串口 ========== */
+#define UART_TX_ADDR    0x8200      /* 发送寄存器地址 */
+#define UART_RX_ADDR    0x8210      /* 接收寄存器地址 */
 
 #define NUM_REGS 32
 #define NUM_FREGS 32
@@ -49,23 +60,32 @@ typedef struct {
 typedef struct {
     /* 通用寄存器 x0-x31 */
     uint32_t regs[NUM_REGS];
-    
+
     /* 浮点寄存器 f0-f31 */
     Float32 fregs[NUM_FREGS];
-    
+
     /* 程序计数器 */
     uint32_t pc;
-    
-    /* 内存 (字访问) */
-    uint32_t memory[MEM_SIZE / 4];
-    
+
+    /* 指令内存 (IMEM) */
+    uint32_t imem[IMEM_SIZE / 4];
+
+    /* 数据内存 (DMEM) */
+    uint32_t dmem[DMEM_SIZE / 4];
+
+    /* UART 虚拟串口状态 */
+    uint8_t uart_tx_char;       /* 待发送字符 */
+    uint8_t uart_rx_char;       /* 接收到的字符 */
+    uint8_t uart_rx_valid;      /* 接收有效标志 */
+    uint8_t uart_tx_ready;      /* 发送就绪标志 (始终为1) */
+
     /* 浮点控制状态寄存器 */
     uint32_t fcsr;
-    
+
     /* 原子操作保留地址 */
     int has_reservation;
     uint32_t reservation_addr;
-    
+
     /* 运行状态 */
     int halted;
     uint32_t cycles;

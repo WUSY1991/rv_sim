@@ -88,7 +88,8 @@ void cpu_writeback_pc(CPU *cpu, uint32_t pc) {
         pc &= ~0x3;
     }
     
-    if (pc >= MEM_SIZE) {
+    /* PC 应在指令内存范围内 */
+    if (pc < IMEM_BASE_ADDR || pc >= IMEM_BASE_ADDR + IMEM_SIZE) {
         fprintf(stderr, "[WRITEBACK] PC 越界：0x%08x\n", pc);
     }
     
@@ -109,35 +110,36 @@ void cpu_writeback_pc(CPU *cpu, uint32_t pc) {
  * 返回：0 表示成功，-1 表示地址越界
  */
 int cpu_memory_write(CPU *cpu, uint32_t addr, uint32_t value, int size) {
-    if (addr >= MEM_SIZE) {
-        fprintf(stderr, "[WRITEBACK] 内存地址越界：0x%08x\n", addr);
-        return -1;
-    }
-    
-    uint32_t offset = (addr % 4) * 8;
-    
-    switch (size) {
-        case 1:  /* 字节 */
-            cpu->memory[addr / 4] &= ~(0xFF << offset);
-            cpu->memory[addr / 4] |= (value & 0xFF) << offset;
-            break;
-        case 2:  /* 半字 */
-            cpu->memory[addr / 4] &= ~(0xFFFF << offset);
-            cpu->memory[addr / 4] |= (value & 0xFFFF) << offset;
-            break;
-        case 4:  /* 字 */
-            cpu->memory[addr / 4] = value;
-            break;
-        default:
-            fprintf(stderr, "[WRITEBACK] 无效的写入大小：%d\n", size);
-            return -1;
-    }
-    
+    /* 数据内存 (DMEM) */
+    if (addr >= DMEM_BASE_ADDR && addr < DMEM_BASE_ADDR + DMEM_SIZE) {
+        uint32_t dmem_addr = addr - DMEM_BASE_ADDR;
+        uint32_t offset = (dmem_addr % 4) * 8;
+
+        switch (size) {
+            case 1:  /* 字节 */
+                cpu->dmem[dmem_addr / 4] &= ~(0xFF << offset);
+                cpu->dmem[dmem_addr / 4] |= (value & 0xFF) << offset;
+                break;
+            case 2:  /* 半字 */
+                cpu->dmem[dmem_addr / 4] &= ~(0xFFFF << offset);
+                cpu->dmem[dmem_addr / 4] |= (value & 0xFFFF) << offset;
+                break;
+            case 4:  /* 字 */
+                cpu->dmem[dmem_addr / 4] = value;
+                break;
+            default:
+                fprintf(stderr, "[WRITEBACK] 无效的写入大小：%d\n", size);
+                return -1;
+        }
+
 #ifdef DEBUG_WRITEBACK
-    printf("[WRITEBACK] MEM[0x%08x] <- 0x%08x (size=%d)\n", addr, value, size);
+        printf("[WRITEBACK] DMEM[0x%08x] <- 0x%08x (size=%d)\n", addr, value, size);
 #endif
-    
-    return 0;
+        return 0;
+    }
+
+    fprintf(stderr, "[WRITEBACK] 内存地址越界：0x%08x\n", addr);
+    return -1;
 }
 
 /**
@@ -149,25 +151,30 @@ int cpu_memory_write(CPU *cpu, uint32_t addr, uint32_t value, int size) {
  * 返回：读取的值，地址越界时返回 0
  */
 uint32_t cpu_memory_read(CPU *cpu, uint32_t addr, int size) {
-    if (addr >= MEM_SIZE) {
-        fprintf(stderr, "[WRITEBACK] 内存地址越界：0x%08x\n", addr);
-        return 0;
+    /* 数据内存 (DMEM) */
+    if (addr >= DMEM_BASE_ADDR && addr < DMEM_BASE_ADDR + DMEM_SIZE) {
+        uint32_t dmem_addr = addr - DMEM_BASE_ADDR;
+        uint32_t value = cpu->dmem[dmem_addr / 4];
+        uint32_t offset = (dmem_addr % 4) * 8;
+
+        switch (size) {
+            case 1:  /* 字节 */
+                value = sign_extend((value >> offset) & 0xFF, 8);
+                break;
+            case 2:  /* 半字 */
+                value = sign_extend((value >> offset) & 0xFFFF, 16);
+                break;
+            case 4:  /* 字 */
+                /* 不需要处理 */
+                break;
+        }
+
+#ifdef DEBUG_WRITEBACK
+        printf("[WRITEBACK] DMEM[0x%08x] -> 0x%08x (size=%d)\n", addr, value, size);
+#endif
+        return value;
     }
-    
-    uint32_t value = cpu->memory[addr / 4];
-    uint32_t offset = (addr % 4) * 8;
-    
-    switch (size) {
-        case 1:  /* 字节 */
-            value = sign_extend((value >> offset) & 0xFF, 8);
-            break;
-        case 2:  /* 半字 */
-            value = sign_extend((value >> offset) & 0xFFFF, 16);
-            break;
-        case 4:  /* 字 */
-            /* 不需要处理 */
-            break;
-    }
-    
-    return value;
+
+    fprintf(stderr, "[WRITEBACK] 内存地址越界：0x%08x\n", addr);
+    return 0;
 }
