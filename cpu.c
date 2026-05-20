@@ -29,7 +29,7 @@ void cpu_init(CPU *cpu) {
     memset(cpu->memory, 0, sizeof(cpu->memory));
     
     /* 初始化 PC */
-    cpu->pc = 0;
+    cpu->pc = 0x1000080;
     
     /* 清零 FCSR */
     cpu->fcsr = 0;

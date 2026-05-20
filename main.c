@@ -1,6 +1,6 @@
 /*
  * main.c - RISC-V RV32IMACF 模拟器主程序
- * 
+ *
  * 编译：gcc -o rv_sim main.c cpu.c fetch.c decode.c execute.c writeback.c -lm
  */
 
@@ -8,6 +8,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 /* 函数声明 */
 int cpu_load_program(CPU *cpu, const uint32_t *program, size_t size);
@@ -96,7 +100,12 @@ int main(int argc, char *argv[]) {
     CPU cpu;
     int run_test = 1;  /* 默认运行测试程序 */
     const char *filename = NULL;
-    
+
+#ifdef _WIN32
+    /* 设置控制台输出编码为 UTF-8，修复中文乱码 */
+    SetConsoleOutputCP(65001);
+#endif
+
     /* 解析命令行参数 */
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
@@ -134,7 +143,7 @@ int main(int argc, char *argv[]) {
     }
     
     /* 运行 CPU */
-    cpu_run(&cpu, 1000);
+    cpu_run(&cpu, 1000*10000);
     
     return 0;
 }
