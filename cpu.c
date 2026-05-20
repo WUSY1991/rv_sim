@@ -8,8 +8,9 @@
 #include <stdlib.h>
 
 /* 外部函数声明 */
-extern uint32_t cpu_fetch(CPU *cpu);
-extern int cpu_execute(CPU *cpu, uint32_t instr);
+extern int is_compressed(uint16_t instr_low);
+extern uint32_t cpu_fetch(CPU *cpu, int *instr_len);
+extern int cpu_execute(CPU *cpu, uint32_t instr, int instr_len);
 extern void cpu_dump(CPU *cpu);
 
 /**
@@ -56,13 +57,12 @@ void cpu_init(CPU *cpu) {
  */
 int cpu_load_program(CPU *cpu, const uint32_t *program, size_t size) {
     if (size > MEM_SIZE) {
-        fprintf(stderr, "[CPU] 程序太大：%zu 字节 (最大 %d)\n", size, MEM_SIZE);
+        fprintf(stderr, "[CPU] 程序太大：%lu 字节 (最大 %d)\n", (unsigned long)size, MEM_SIZE);
         return -1;
     }
 
-    /* 按字复制 */
-    size_t num_words = size / sizeof(uint32_t);
-    memcpy(cpu->memory, program, num_words * sizeof(uint32_t));
+    /* 按字节复制，处理非对齐大小 */
+    memcpy(cpu->memory, program, size);
 
     return 0;
 }
@@ -127,25 +127,26 @@ void cpu_run(CPU *cpu, int max_cycles) {
     int cycles = 0;
 
     printf("========================================\n");
-    printf("  RISC-V RV32IMACF 模拟器\n");
+    printf("  RISC-V RV32IMACFC 模拟器\n");
     printf("========================================\n\n");
     printf("开始执行 (PC=0x%08x)...\n\n", cpu->pc);
 
     while (cycles < max_cycles && !cpu->halted) {
         /* 取指 */
-        uint32_t instr = cpu_fetch(cpu);
-        if (instr == 0) {
+        int instr_len = 0;
+        uint32_t instr = cpu_fetch(cpu, &instr_len);
+        if (instr == 0 && instr_len == 0) {
             printf("[CPU] 遇到零指令，停止执行\n");
             break;
         }
 
         /* 打印当前指令 (调试用) */
 #ifdef DEBUG_TRACE
-        printf("[0x%08x] 0x%08x\n", cpu->pc, instr);
+        printf("[0x%08x] 0x%08x (len=%d)\n", cpu->pc, instr, instr_len);
 #endif
 
         /* 执行 (包含译码和写回) */
-        int result = cpu_execute(cpu, instr);
+        int result = cpu_execute(cpu, instr, instr_len);
         if (result <= 0) {
             break;
         }
@@ -195,7 +196,7 @@ void cpu_dump(CPU *cpu) {
     printf("\n=== 状态 ===\n");
     printf("  PC    = 0x%08x\n", cpu->pc);
     printf("  FCSR  = 0x%08x\n", cpu->fcsr);
-    printf("  周期数 = %d\n", cpu->cycles);
+    printf("  期数 = %d\n", cpu->cycles);
     if (cpu->has_reservation) {
         printf("  保留地址 = 0x%08x\n", cpu->reservation_addr);
     }
@@ -212,13 +213,14 @@ int cpu_step(CPU *cpu) {
         return 0;
     }
 
-    uint32_t instr = cpu_fetch(cpu);
-    if (instr == 0) {
+    int instr_len = 0;
+    uint32_t instr = cpu_fetch(cpu, &instr_len);
+    if (instr == 0 && instr_len == 0) {
         return 0;
     }
 
-    printf("[0x%08x] 0x%08x\n", cpu->pc, instr);
+    printf("[0x%08x] 0x%08x (len=%d)\n", cpu->pc, instr, instr_len);
 
-    int result = cpu_execute(cpu, instr);
+    int result = cpu_execute(cpu, instr, instr_len);
     return result > 0;
 }

@@ -401,17 +401,38 @@ static void exec_andi(CPU *cpu, IType *i) {
 /**
  * cpu_execute - 执行指令
  * @cpu: CPU 状态结构体指针
- * @instr: 32 位指令
- * 
- * 返回：1 表示继续执行，0 表示停止 (ECALL/未知指令)，-1 表示错误
+ * @instr: 指令 (压缩指令为 16 位，标准指令为 32 位)
+ * @instr_len: 指令长度 (2 或 4)
+ *
+ * 返回：1 表示继续执行，0 表示停止 (ECALL/EBREAK)，-1 表示错误
  */
-int cpu_execute(CPU *cpu, uint32_t instr) {
+int cpu_execute(CPU *cpu, uint32_t instr, int instr_len) {
+    /* 压缩指令展开为 32 位等效指令 */
+    uint32_t expanded_instr;
+    int actual_len;
+
+    if (instr_len == 2) {
+        expanded_instr = expand_compressed((uint16_t)instr);
+        if (expanded_instr == 0) {
+            fprintf(stderr, "[EXECUTE] 非法压缩指令：0x%04x\n", (uint16_t)instr);
+            return -1;
+        }
+        actual_len = 2;
+#ifdef DEBUG_COMPRESSED
+        printf("[COMPRESSED] 0x%04x -> 0x%08x\n", (uint16_t)instr, expanded_instr);
+#endif
+    } else {
+        expanded_instr = instr;
+        actual_len = 4;
+    }
+
+    /* 统一执行 32 位指令 */
     RType r_inst;
     IType i_inst;
     SType s_inst;
-    
-    cpu_decode(cpu, instr, &r_inst, &i_inst, &s_inst, NULL);
-    
+
+    cpu_decode(cpu, expanded_instr, &r_inst, &i_inst, &s_inst, NULL);
+
     uint32_t opcode = r_inst.opcode;
     uint32_t funct3 = r_inst.funct3;
     uint32_t funct7 = r_inst.funct7;
@@ -450,7 +471,7 @@ int cpu_execute(CPU *cpu, uint32_t instr) {
                     case 0x7: exec_and(cpu, &r_inst); break;
                 }
             }
-            cpu->pc += 4;
+            cpu->pc += actual_len;
             break;
             
         /* ==================== OP-IMM (0x13) ==================== */
@@ -468,7 +489,7 @@ int cpu_execute(CPU *cpu, uint32_t instr) {
                 case 0x6: exec_ori(cpu, &i_inst); break;
                 case 0x7: exec_andi(cpu, &i_inst); break;
             }
-            cpu->pc += 4;
+            cpu->pc += actual_len;
             break;
             
         /* ==================== OP-ATOM (0x2F) - A 扩展 ==================== */
@@ -482,7 +503,7 @@ int cpu_execute(CPU *cpu, uint32_t instr) {
                 else if (funct3 == F3_AMO)
                     exec_amo(cpu, &r_inst, funct5);
             }
-            cpu->pc += 4;
+            cpu->pc += actual_len;
             break;
             
         /* ==================== LOAD (0x03) ==================== */
@@ -502,10 +523,16 @@ int cpu_execute(CPU *cpu, uint32_t instr) {
                         case 0x2:  /* LW */
                             cpu->regs[i_inst.rd] = cpu->memory[addr / 4];
                             break;
+                        case 0x4:  /* LBU */
+                            cpu->regs[i_inst.rd] = (cpu->memory[addr / 4] >> ((addr % 4) * 8)) & 0xFF;
+                            break;
+                        case 0x5:  /* LHU */
+                            cpu->regs[i_inst.rd] = (cpu->memory[addr / 4] >> ((addr % 4) * 8)) & 0xFFFF;
+                            break;
                     }
                 }
             }
-            cpu->pc += 4;
+            cpu->pc += actual_len;
             break;
             
         /* ==================== STORE (0x23) ==================== */
@@ -531,7 +558,7 @@ int cpu_execute(CPU *cpu, uint32_t instr) {
                     }
                 }
             }
-            cpu->pc += 4;
+            cpu->pc += actual_len;
             break;
             
         /* ==================== BRANCH (0x63) ==================== */
@@ -559,30 +586,30 @@ int cpu_execute(CPU *cpu, uint32_t instr) {
         case OP_JALR:
             {
                 uint32_t target = (cpu->regs[i_inst.rs1] + i_inst.imm) & ~1;
-                cpu->regs[i_inst.rd] = cpu->pc + 4;
+                cpu->regs[i_inst.rd] = cpu->pc + actual_len;
                 cpu->pc = target;
             }
             break;
-            
+
         /* ==================== JAL (0x6F) ==================== */
         case OP_JAL:
             {
-                int32_t imm = decode_jal_imm(instr);
-                cpu->regs[r_inst.rd] = cpu->pc + 4;
+                int32_t imm = decode_jal_imm(expanded_instr);
+                cpu->regs[r_inst.rd] = cpu->pc + actual_len;
                 cpu->pc += imm;
             }
             break;
             
         /* ==================== LUI (0x37) ==================== */
         case OP_LUI:
-            cpu->regs[r_inst.rd] = instr & 0xFFFFF000;
-            cpu->pc += 4;
+            cpu->regs[r_inst.rd] = expanded_instr & 0xFFFFF000;
+            cpu->pc += actual_len;
             break;
-            
+
         /* ==================== AUIPC (0x17) ==================== */
         case OP_AUIPC:
-            cpu->regs[r_inst.rd] = cpu->pc + (instr & 0xFFFFF000);
-            cpu->pc += 4;
+            cpu->regs[r_inst.rd] = cpu->pc + (expanded_instr & 0xFFFFF000);
+            cpu->pc += actual_len;
             break;
             
         /* ==================== SYSTEM (0x73) ==================== */
@@ -593,11 +620,11 @@ int cpu_execute(CPU *cpu, uint32_t instr) {
                 uint32_t rs1 = r_inst.rs1;
                 uint32_t uimm = rs1;  /* 立即数版本使用 rs1 作为 uimm[4:0] */
 
-                if (instr == 0x00000073) {  /* ECALL */
+                if (expanded_instr == 0x00000073) {  /* ECALL */
                     printf("\n[ECALL] 系统调用\n");
                     cpu->halted = 1;
                     return 0;
-                } else if (instr == 0x00100073) {  /* EBREAK */
+                } else if (expanded_instr == 0x00100073) {  /* EBREAK */
                     printf("\n[EBREAK] 断点\n");
                     cpu->halted = 1;
                     return 0;
@@ -614,10 +641,10 @@ int cpu_execute(CPU *cpu, uint32_t instr) {
                 } else if (funct3 == F3_CSRRCI) {
                     exec_csrrci(cpu, rd, uimm, csr_addr);
                 } else {
-                    fprintf(stderr, "[EXECUTE] 未知 SYSTEM 指令：0x%08x (PC=0x%08x)\n", instr, cpu->pc);
+                    fprintf(stderr, "[EXECUTE] 未知 SYSTEM 指令：0x%08x (PC=0x%08x)\n", expanded_instr, cpu->pc);
                 }
             }
-            cpu->pc += 4;
+            cpu->pc += actual_len;
             break;
             
         /* ==================== F 扩展 - LOAD_FP (0x07) ==================== */
@@ -627,7 +654,7 @@ int cpu_execute(CPU *cpu, uint32_t instr) {
                 if (addr < MEM_SIZE)
                     cpu->fregs[i_inst.rd].u = cpu->memory[addr / 4];
             }
-            cpu->pc += 4;
+            cpu->pc += actual_len;
             break;
             
         /* ==================== F 扩展 - STORE_FP (0x27) ==================== */
@@ -638,31 +665,31 @@ int cpu_execute(CPU *cpu, uint32_t instr) {
                 if (addr < MEM_SIZE)
                     cpu->memory[addr / 4] = cpu->fregs[s_inst.rs2].u;
             }
-            cpu->pc += 4;
+            cpu->pc += actual_len;
             break;
             
         /* ==================== F 扩展 - FMADD (0x43) ==================== */
         case OP_FMADD:
             exec_fmadd(cpu, &r_inst);
-            cpu->pc += 4;
+            cpu->pc += actual_len;
             break;
             
         /* ==================== F 扩展 - FMSUB (0x47) ==================== */
         case OP_FMSUB:
             exec_fmsub(cpu, &r_inst);
-            cpu->pc += 4;
+            cpu->pc += actual_len;
             break;
             
         /* ==================== F 扩展 - FNMSUB (0x4B) ==================== */
         case OP_FNMSUB:
             exec_fnmsub(cpu, &r_inst);
-            cpu->pc += 4;
+            cpu->pc += actual_len;
             break;
             
         /* ==================== F 扩展 - FNMADD (0x4F) ==================== */
         case OP_FNMADD:
             exec_fnmadd(cpu, &r_inst);
-            cpu->pc += 4;
+            cpu->pc += actual_len;
             break;
             
         /* ==================== F 扩展 - OP_FP (0x53) ==================== */
@@ -732,12 +759,12 @@ int cpu_execute(CPU *cpu, uint32_t instr) {
                     }
                 }
             }
-            cpu->pc += 4;
+            cpu->pc += actual_len;
             break;
             
         /* ==================== 未知指令 ==================== */
         default:
-            fprintf(stderr, "[EXECUTE] 未知指令：0x%08x (PC=0x%08x)\n", instr, cpu->pc);
+            fprintf(stderr, "[EXECUTE] 未知指令：0x%08x (PC=0x%08x)\n", expanded_instr, cpu->pc);
             return -1;
     }
     

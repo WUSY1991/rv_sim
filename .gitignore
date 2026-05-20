@@ -12,5 +12,6 @@ tests/test_base
 *.bin
 !test_fpu.bin
 
+*.exe
 # 调试文件
 *.dSYM/

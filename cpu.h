@@ -35,6 +35,12 @@ typedef struct {
     uint32_t opcode:7, rd:5, rm:3, rs1:5, rs2:5, fmt:2, rs3:5;
 } R4Type;  /* F 扩展融合乘加指令 */
 
+/* 压缩指令 quadrant 定义 */
+#define C_QUADRANT_0  0x00  /* C.ADDI4SPN, C.LW, C.SW */
+#define C_QUADRANT_1  0x01  /* C.ADDI, C.JAL, C.LI, C.J, C.BEQZ */
+#define C_QUADRANT_2  0x02  /* C.SLLI, C.LWSP, C.JR, C.MV, C.ADD */
+#define C_QUADRANT_3  0x03  /* 32 位标准指令 */
+
 /* CPU 状态结构体 - 包含所有寄存器和状态 */
 typedef struct {
     /* 通用寄存器 x0-x31 */
@@ -110,9 +116,11 @@ typedef struct {
 
 /* 函数声明 */
 void cpu_init(CPU *cpu);
-uint32_t cpu_fetch(CPU *cpu);
+int is_compressed(uint16_t instr_low);
+uint32_t cpu_fetch(CPU *cpu, int *instr_len);
+uint32_t expand_compressed(uint16_t instr);
 int cpu_decode(CPU *cpu, uint32_t instr, RType *r, IType *i, SType *s, R4Type *r4);
-int cpu_execute(CPU *cpu, uint32_t instr);
+int cpu_execute(CPU *cpu, uint32_t instr, int instr_len);
 void cpu_writeback(CPU *cpu, uint32_t rd, uint32_t value);
 void cpu_run(CPU *cpu, int max_cycles);
 void cpu_dump(CPU *cpu);
