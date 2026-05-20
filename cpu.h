@@ -86,6 +86,19 @@ typedef struct {
 /* A 扩展 funct3 */
 #define F3_AMO    0x02
 
+/* CSR 地址定义 */
+#define CSR_FFLAGS  0x001  /* 浮点异常标志 */
+#define CSR_FRM     0x002  /* 浮点舍入模式 */
+#define CSR_FCSR    0x003  /* 浮点控制状态寄存器 (FCSR = FRM<<5 | FFLAGS) */
+
+/* CSR 指令 funct3 */
+#define F3_CSRRW   0x1
+#define F3_CSRRS   0x2
+#define F3_CSRRC   0x3
+#define F3_CSRRWI  0x5
+#define F3_CSRRSI  0x6
+#define F3_CSRRCI  0x7
+
 /* F 扩展 opcode */
 #define OP_LOAD_FP   0x07
 #define OP_STORE_FP  0x27

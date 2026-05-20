@@ -180,7 +180,7 @@ static void exec_fclass(CPU *cpu, RType *r) {
     uint32_t exp = (u >> 23) & 0xFF;
     uint32_t frac = u & 0x7FFFFF;
     uint32_t result = 0;
-    
+
     if (exp == 0xFF && frac)
         result = sign ? (1<<0) : (1<<1);      /* NaN */
     else if (exp == 0xFF)
@@ -191,8 +191,16 @@ static void exec_fclass(CPU *cpu, RType *r) {
         result = sign ? (1<<6) : (1<<7);      /* 零 */
     else
         result = sign ? (1<<8) : (1<<9);      /* 正规数 */
-    
+
     cpu->regs[r->rd] = result;
+}
+
+static void exec_fmv_x_w(CPU *cpu, RType *r) {
+    cpu->regs[r->rd] = cpu->fregs[r->rs1].u;  /* 位拷贝 */
+}
+
+static void exec_fmv_w_x(CPU *cpu, RType *r) {
+    cpu->fregs[r->rd].u = cpu->regs[r->rs1];  /* 位拷贝 */
 }
 
 static void exec_fle(CPU *cpu, RType *r) {
@@ -205,6 +213,91 @@ static void exec_flt(CPU *cpu, RType *r) {
 
 static void exec_feq(CPU *cpu, RType *r) {
     cpu->regs[r->rd] = (cpu->fregs[r->rs1].f == cpu->fregs[r->rs2].f) ? 1 : 0;
+}
+
+/* ==================== CSR 寄存器操作 ==================== */
+
+static uint32_t csr_read(CPU *cpu, uint32_t csr_addr) {
+    switch (csr_addr) {
+        case CSR_FFLAGS:
+            return cpu->fcsr & 0x1F;  /* FFLAGS = FCSR[4:0] */
+        case CSR_FRM:
+            return (cpu->fcsr >> 5) & 0x7;  /* FRM = FCSR[7:5] */
+        case CSR_FCSR:
+            return cpu->fcsr;  /* FCSR 完整值 */
+        default:
+            return 0;  /* 未实现的 CSR 返回 0 */
+    }
+}
+
+static void csr_write(CPU *cpu, uint32_t csr_addr, uint32_t value) {
+    switch (csr_addr) {
+        case CSR_FFLAGS:
+            cpu->fcsr = (cpu->fcsr & ~0x1F) | (value & 0x1F);
+            break;
+        case CSR_FRM:
+            cpu->fcsr = (cpu->fcsr & ~0xE0) | ((value & 0x7) << 5);
+            break;
+        case CSR_FCSR:
+            cpu->fcsr = value & 0xFF;  /* FCSR 只有低 8 位有效 */
+            break;
+        /* 其他 CSR 不实现，写入忽略 */
+    }
+}
+
+static void exec_csrrw(CPU *cpu, uint32_t rd, uint32_t rs1, uint32_t csr_addr) {
+    uint32_t old_val = csr_read(cpu, csr_addr);
+    if (rs1 != 0) {  /* rs1=0 时只读不写 */
+        csr_write(cpu, csr_addr, cpu->regs[rs1]);
+    }
+    if (rd != 0) {
+        cpu->regs[rd] = old_val;
+    }
+}
+
+static void exec_csrrs(CPU *cpu, uint32_t rd, uint32_t rs1, uint32_t csr_addr) {
+    uint32_t old_val = csr_read(cpu, csr_addr);
+    if (rs1 != 0) {  /* rs1=0 时只读不置位 */
+        csr_write(cpu, csr_addr, old_val | cpu->regs[rs1]);
+    }
+    if (rd != 0) {
+        cpu->regs[rd] = old_val;
+    }
+}
+
+static void exec_csrrc(CPU *cpu, uint32_t rd, uint32_t rs1, uint32_t csr_addr) {
+    uint32_t old_val = csr_read(cpu, csr_addr);
+    if (rs1 != 0) {  /* rs1=0 时只读不清位 */
+        csr_write(cpu, csr_addr, old_val & ~cpu->regs[rs1]);
+    }
+    if (rd != 0) {
+        cpu->regs[rd] = old_val;
+    }
+}
+
+/* CSR 立即数版本 (rs1 作为 uimm[4:0]) */
+static void exec_csrrwi(CPU *cpu, uint32_t rd, uint32_t uimm, uint32_t csr_addr) {
+    uint32_t old_val = csr_read(cpu, csr_addr);
+    csr_write(cpu, csr_addr, uimm);  /* 立即数直接写入 */
+    if (rd != 0) {
+        cpu->regs[rd] = old_val;
+    }
+}
+
+static void exec_csrrsi(CPU *cpu, uint32_t rd, uint32_t uimm, uint32_t csr_addr) {
+    uint32_t old_val = csr_read(cpu, csr_addr);
+    csr_write(cpu, csr_addr, old_val | uimm);
+    if (rd != 0) {
+        cpu->regs[rd] = old_val;
+    }
+}
+
+static void exec_csrrci(CPU *cpu, uint32_t rd, uint32_t uimm, uint32_t csr_addr) {
+    uint32_t old_val = csr_read(cpu, csr_addr);
+    csr_write(cpu, csr_addr, old_val & ~uimm);
+    if (rd != 0) {
+        cpu->regs[rd] = old_val;
+    }
 }
 
 /* F 扩展融合乘加 (rs2 字段实际是 rs3) */
@@ -326,8 +419,8 @@ int cpu_execute(CPU *cpu, uint32_t instr) {
     switch (opcode) {
         /* ==================== OP (0x33) ==================== */
         case OP_OP:
-            /* M 扩展 (funct3: 0-7) */
-            if (funct3 <= F3_REMU) {
+            /* M 扩展 (funct7 = 0x01) */
+            if (funct7 == 0x01) {
                 switch (funct3) {
                     case F3_MUL:   exec_mul(cpu, &r_inst); break;
                     case F3_MULH:  exec_mulh(cpu, &r_inst); break;
@@ -338,26 +431,24 @@ int cpu_execute(CPU *cpu, uint32_t instr) {
                     case F3_REM:   exec_rem(cpu, &r_inst); break;
                     case F3_REMU:  exec_remu(cpu, &r_inst); break;
                 }
-                cpu->pc += 4;
-                break;
-            }
-            
-            /* 基础 OP */
-            switch (funct3) {
-                case 0x0:
-                    if (funct7 == 0x20) exec_sub(cpu, &r_inst);
-                    else exec_add(cpu, &r_inst);
-                    break;
-                case 0x1: exec_sll(cpu, &r_inst); break;
-                case 0x2: exec_slt(cpu, &r_inst); break;
-                case 0x3: exec_sltu(cpu, &r_inst); break;
-                case 0x4: exec_xor(cpu, &r_inst); break;
-                case 0x5:
-                    if (funct7 == 0x20) exec_sra(cpu, &r_inst);
-                    else exec_srl(cpu, &r_inst);
-                    break;
-                case 0x6: exec_or(cpu, &r_inst); break;
-                case 0x7: exec_and(cpu, &r_inst); break;
+            } else {
+                /* 基础 OP */
+                switch (funct3) {
+                    case 0x0:
+                        if (funct7 == 0x20) exec_sub(cpu, &r_inst);
+                        else exec_add(cpu, &r_inst);
+                        break;
+                    case 0x1: exec_sll(cpu, &r_inst); break;
+                    case 0x2: exec_slt(cpu, &r_inst); break;
+                    case 0x3: exec_sltu(cpu, &r_inst); break;
+                    case 0x4: exec_xor(cpu, &r_inst); break;
+                    case 0x5:
+                        if (funct7 == 0x20) exec_sra(cpu, &r_inst);
+                        else exec_srl(cpu, &r_inst);
+                        break;
+                    case 0x6: exec_or(cpu, &r_inst); break;
+                    case 0x7: exec_and(cpu, &r_inst); break;
+                }
             }
             cpu->pc += 4;
             break;
@@ -496,10 +587,35 @@ int cpu_execute(CPU *cpu, uint32_t instr) {
             
         /* ==================== SYSTEM (0x73) ==================== */
         case OP_SYSTEM:
-            if ((instr & 0xFE000FFF) == 0x00000073) {
-                printf("\n[ECALL] 系统调用\n");
-                cpu->halted = 1;
-                return 0;
+            {
+                uint32_t csr_addr = (instr >> 20) & 0xFFF;  /* CSR 地址 */
+                uint32_t rd = r_inst.rd;
+                uint32_t rs1 = r_inst.rs1;
+                uint32_t uimm = rs1;  /* 立即数版本使用 rs1 作为 uimm[4:0] */
+
+                if (instr == 0x00000073) {  /* ECALL */
+                    printf("\n[ECALL] 系统调用\n");
+                    cpu->halted = 1;
+                    return 0;
+                } else if (instr == 0x00100073) {  /* EBREAK */
+                    printf("\n[EBREAK] 断点\n");
+                    cpu->halted = 1;
+                    return 0;
+                } else if (funct3 == F3_CSRRW) {
+                    exec_csrrw(cpu, rd, rs1, csr_addr);
+                } else if (funct3 == F3_CSRRS) {
+                    exec_csrrs(cpu, rd, rs1, csr_addr);
+                } else if (funct3 == F3_CSRRC) {
+                    exec_csrrc(cpu, rd, rs1, csr_addr);
+                } else if (funct3 == F3_CSRRWI) {
+                    exec_csrrwi(cpu, rd, uimm, csr_addr);
+                } else if (funct3 == F3_CSRRSI) {
+                    exec_csrrsi(cpu, rd, uimm, csr_addr);
+                } else if (funct3 == F3_CSRRCI) {
+                    exec_csrrci(cpu, rd, uimm, csr_addr);
+                } else {
+                    fprintf(stderr, "[EXECUTE] 未知 SYSTEM 指令：0x%08x (PC=0x%08x)\n", instr, cpu->pc);
+                }
             }
             cpu->pc += 4;
             break;
@@ -552,40 +668,66 @@ int cpu_execute(CPU *cpu, uint32_t instr) {
         /* ==================== F 扩展 - OP_FP (0x53) ==================== */
         case OP_OP_FP:
             {
-                uint32_t fmt = (funct7 >> 2) & 0x7;
+                uint32_t funct5 = funct7 >> 2;
+                uint32_t fmt = funct7 & 0x03;
                 uint32_t rm = r_inst.rs2;
-                
-                if (fmt == 0) {  /* 单精度 */
-                    switch (funct7 & 0x60) {
-                        case 0x00: exec_fadd(cpu, &r_inst); break;
-                        case 0x04: exec_fsub(cpu, &r_inst); break;
-                        case 0x08: exec_fmul(cpu, &r_inst); break;
-                        case 0x0C: exec_fdiv(cpu, &r_inst); break;
-                        case 0x14: exec_fsqrt(cpu, &r_inst); break;
-                        case 0x10:  /* FSGNJ */
+
+                if (fmt == 0) {  /* 单精度 (fmt=0) */
+                    switch (funct5) {
+                        case 0x00:  /* FADD.S */
+                            exec_fadd(cpu, &r_inst);
+                            break;
+                        case 0x01:  /* FSUB.S */
+                            exec_fsub(cpu, &r_inst);
+                            break;
+                        case 0x02:  /* FMUL.S */
+                            exec_fmul(cpu, &r_inst);
+                            break;
+                        case 0x03:  /* FDIV.S */
+                            exec_fdiv(cpu, &r_inst);
+                            break;
+                        case 0x04:  /* FSGNJ.S (rm=0), FSGNJN.S (rm=1), FSGNJX.S (rm=2) */
                             if (rm == 0) exec_fsgnj(cpu, &r_inst, 0, 0);
                             else if (rm == 1) exec_fsgnj(cpu, &r_inst, 1, 0);
                             else if (rm == 2) exec_fsgnj(cpu, &r_inst, 0, 1);
                             break;
-                        case 0x18:  /* FMIN/FMAX */
+                        case 0x05:  /* FMIN.S (rm=0), FMAX.S (rm=1) */
                             if (rm == 0) exec_fmin(cpu, &r_inst);
                             else if (rm == 1) exec_fmax(cpu, &r_inst);
                             break;
-                        case 0x20:  /* FCVT.W.S */
+                        case 0x06:  /* FSQRT.S */
+                            exec_fsqrt(cpu, &r_inst);
+                            break;
+                        case 0x07:  /* FLE.S (rm=0), FLT.S (rm=1), FEQ.S (rm=2) */
+                            if (rm == 0) exec_fle(cpu, &r_inst);
+                            else if (rm == 1) exec_flt(cpu, &r_inst);
+                            else if (rm == 2) exec_feq(cpu, &r_inst);
+                            break;
+                        case 0x08:  /* FCVT.W.S (rs2=signed/unsigned) */
                             if (rm == 0) exec_fcvt_w_s(cpu, &r_inst, 0);
                             else if (rm == 1) exec_fcvt_w_s(cpu, &r_inst, 1);
                             break;
-                        case 0x60:  /* FCVT.S.W */
+                        case 0x09:  /* FCVT.WU.S */
+                            exec_fcvt_w_s(cpu, &r_inst, 1);
+                            break;
+                        case 0x0A:  /* FCLASS */
+                            exec_fclass(cpu, &r_inst);
+                            break;
+                        case 0x0E:  /* FCVT.S.W (rs2=signed/unsigned) */
                             if (rm == 0) exec_fcvt_s_w(cpu, &r_inst, 0);
                             else if (rm == 1) exec_fcvt_s_w(cpu, &r_inst, 1);
                             break;
-                        case 0x50:  /* 浮点比较 */
-                            if (rm == 1) exec_feq(cpu, &r_inst);
-                            else if (rm == 2) exec_flt(cpu, &r_inst);
-                            else if (rm == 3) exec_fle(cpu, &r_inst);
+                        case 0x0F:  /* FCVT.S.WU */
+                            exec_fcvt_s_w(cpu, &r_inst, 1);
                             break;
-                        case 0x58:  /* FCLASS */
-                            if (rm == 0) exec_fclass(cpu, &r_inst);
+                        case 0x1C:  /* FMV.X.W */
+                            exec_fmv_x_w(cpu, &r_inst);
+                            break;
+                        case 0x1E:  /* FMV.W.X */
+                            exec_fmv_w_x(cpu, &r_inst);
+                            break;
+                        default:
+                            fprintf(stderr, "[EXECUTE] 未知 F 指令：funct5=0x%02x\n", funct5);
                             break;
                     }
                 }
