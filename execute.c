@@ -526,7 +526,7 @@ int cpu_execute(CPU *cpu, uint32_t instr, int instr_len) {
     uint32_t opcode = r_inst.opcode;
     uint32_t funct3 = r_inst.funct3;
     uint32_t funct7 = r_inst.funct7;
-    
+
     switch (opcode) {
         /* ==================== OP (0x33) ==================== */
         case OP_OP:
@@ -563,7 +563,7 @@ int cpu_execute(CPU *cpu, uint32_t instr, int instr_len) {
             }
             cpu->pc += actual_len;
             break;
-            
+
         /* ==================== OP-IMM (0x13) ==================== */
         case OP_OP_IMM:
             switch (funct3) {
@@ -581,7 +581,7 @@ int cpu_execute(CPU *cpu, uint32_t instr, int instr_len) {
             }
             cpu->pc += actual_len;
             break;
-            
+
         /* ==================== OP-ATOM (0x2F) - A 扩展 ==================== */
         case 0x2F:
             {
@@ -595,7 +595,7 @@ int cpu_execute(CPU *cpu, uint32_t instr, int instr_len) {
             }
             cpu->pc += actual_len;
             break;
-            
+
         /* ==================== LOAD (0x03) ==================== */
         case OP_LOAD:
             {
@@ -651,7 +651,7 @@ int cpu_execute(CPU *cpu, uint32_t instr, int instr_len) {
             }
             cpu->pc += actual_len;
             break;
-            
+
         /* ==================== STORE (0x23) ==================== */
         case OP_STORE:
             {
@@ -698,7 +698,7 @@ int cpu_execute(CPU *cpu, uint32_t instr, int instr_len) {
             }
             cpu->pc += actual_len;
             break;
-            
+
         /* ==================== BRANCH (0x63) ==================== */
         case OP_BRANCH:
             {
@@ -706,7 +706,7 @@ int cpu_execute(CPU *cpu, uint32_t instr, int instr_len) {
                 int32_t rs1 = (int32_t)cpu->regs[s_inst.rs1];
                 int32_t rs2 = (int32_t)cpu->regs[s_inst.rs2];
                 int taken = 0;
-                
+
                 switch (funct3) {
                     case 0x0: taken = (rs1 == rs2); break;  /* BEQ */
                     case 0x1: taken = (rs1 != rs2); break;  /* BNE */
@@ -715,11 +715,11 @@ int cpu_execute(CPU *cpu, uint32_t instr, int instr_len) {
                     case 0x6: taken = ((uint32_t)rs1 < (uint32_t)rs2); break;  /* BLTU */
                     case 0x7: taken = ((uint32_t)rs1 >= (uint32_t)rs2); break; /* BGEU */
                 }
-                
+
                 cpu->pc += taken ? imm : 4;
             }
             break;
-            
+
         /* ==================== JALR (0x67) ==================== */
         case OP_JALR:
             {
@@ -737,7 +737,7 @@ int cpu_execute(CPU *cpu, uint32_t instr, int instr_len) {
                 cpu->pc += imm;
             }
             break;
-            
+
         /* ==================== LUI (0x37) ==================== */
         case OP_LUI:
             cpu->regs[r_inst.rd] = expanded_instr & 0xFFFFF000;
@@ -749,7 +749,7 @@ int cpu_execute(CPU *cpu, uint32_t instr, int instr_len) {
             cpu->regs[r_inst.rd] = cpu->pc + (expanded_instr & 0xFFFFF000);
             cpu->pc += actual_len;
             break;
-            
+
         /* ==================== SYSTEM (0x73) ==================== */
         case OP_SYSTEM:
             {
@@ -784,7 +784,7 @@ int cpu_execute(CPU *cpu, uint32_t instr, int instr_len) {
             }
             cpu->pc += actual_len;
             break;
-            
+
         /* ==================== F 扩展 - LOAD_FP (0x07) ==================== */
         case OP_LOAD_FP:
             {
@@ -826,31 +826,31 @@ int cpu_execute(CPU *cpu, uint32_t instr, int instr_len) {
             }
             cpu->pc += actual_len;
             break;
-            
+
         /* ==================== F 扩展 - FMADD (0x43) ==================== */
         case OP_FMADD:
             exec_fmadd(cpu, &r_inst);
             cpu->pc += actual_len;
             break;
-            
+
         /* ==================== F 扩展 - FMSUB (0x47) ==================== */
         case OP_FMSUB:
             exec_fmsub(cpu, &r_inst);
             cpu->pc += actual_len;
             break;
-            
+
         /* ==================== F 扩展 - FNMSUB (0x4B) ==================== */
         case OP_FNMSUB:
             exec_fnmsub(cpu, &r_inst);
             cpu->pc += actual_len;
             break;
-            
+
         /* ==================== F 扩展 - FNMADD (0x4F) ==================== */
         case OP_FNMADD:
             exec_fnmadd(cpu, &r_inst);
             cpu->pc += actual_len;
             break;
-            
+
         /* ==================== F 扩展 - OP_FP (0x53) ==================== */
         case OP_OP_FP:
             {
@@ -920,16 +920,16 @@ int cpu_execute(CPU *cpu, uint32_t instr, int instr_len) {
             }
             cpu->pc += actual_len;
             break;
-            
+
         /* ==================== 未知指令 ==================== */
         default:
             fprintf(stderr, "[EXECUTE] 未知指令：0x%08x (PC=0x%08x)\n", expanded_instr, cpu->pc);
             return -1;
     }
-    
+
     /* x0 硬连线为 0 */
     cpu->regs[0] = 0;
-    
+
     cpu->cycles++;
     return 1;
 }

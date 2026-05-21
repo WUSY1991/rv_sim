@@ -18,24 +18,32 @@ int c_reg_map(int reg) {
 
 /**
  * decode_c_addi4spn_imm - 解码 C.ADDI4SPN 立即数
+ * nzimm[9:2] 编码：instr[12,11,10,9,8,7,6,5] → nzimm[9,4,8,7,6,5,3,2]
  */
 int32_t decode_c_addi4spn_imm(uint16_t instr) {
     uint32_t imm = 0;
-    imm |= ((instr >> 5) & 0x1) << 2;
-    imm |= ((instr >> 6) & 0x1) << 3;
-    imm |= ((instr >> 7) & 0x7) << 4;
-    imm |= ((instr >> 10) & 0x3) << 7;
-    imm |= ((instr >> 12) & 0x1) << 9;
+    imm |= ((instr >> 5) & 0x1) << 2;   /* instr[5] → nzimm[2] */
+    imm |= ((instr >> 6) & 0x1) << 3;   /* instr[6] → nzimm[3] */
+    imm |= ((instr >> 7) & 0x1) << 5;   /* instr[7] → nzimm[5] */
+    imm |= ((instr >> 8) & 0x1) << 6;   /* instr[8] → nzimm[6] */
+    imm |= ((instr >> 9) & 0x1) << 7;   /* instr[9] → nzimm[7] */
+    imm |= ((instr >> 10) & 0x1) << 8;  /* instr[10] → nzimm[8] */
+    imm |= ((instr >> 11) & 0x1) << 4;  /* instr[11] → nzimm[4] */
+    imm |= ((instr >> 12) & 0x1) << 9;  /* instr[12] → nzimm[9] */
     return imm;
 }
 
 /**
- * decode_c_lw_imm - 解码 C.LW 立即数
+ * decode_c_lw_imm - 解码 C.LW/C.FLW 立即数
+ * uimm[7:2] 编码：instr[6,5,12,11,10] → uimm[7,6,5,4,3]
  */
 int32_t decode_c_lw_imm(uint16_t instr) {
     uint32_t imm = 0;
-    imm |= ((instr >> 5) & 0x3) << 2;
-    imm |= ((instr >> 10) & 0x7) << 4;
+    imm |= ((instr >> 10) & 0x1) << 3;  /* instr[10] → uimm[3] */
+    imm |= ((instr >> 11) & 0x1) << 4;  /* instr[11] → uimm[4] */
+    imm |= ((instr >> 12) & 0x1) << 5;  /* instr[12] → uimm[5] */
+    imm |= ((instr >> 5) & 0x1) << 6;   /* instr[5] → uimm[6] */
+    imm |= ((instr >> 6) & 0x1) << 7;   /* instr[6] → uimm[7] */
     return imm;
 }
 
@@ -58,53 +66,71 @@ int32_t decode_c_li_imm(uint16_t instr) {
 }
 
 /**
- * decode_c_j_imm - 解码 C.J 立即数
+ * decode_c_j_imm - 解码 C.J/C.JAL 立即数
+ * imm[11:1] 编码：instr[12,8,10,9,6,7,2,5,4,3,11] → imm[11,10,9,8,7,6,5,4,3,2,1]
+ * 注意：imm[0] = 0
  */
 int32_t decode_c_j_imm(uint16_t instr) {
     uint32_t imm = 0;
-    imm |= ((instr >> 2) & 0x1) << 1;
-    imm |= ((instr >> 3) & 0x7) << 2;
-    imm |= ((instr >> 11) & 0x1) << 5;
-    imm |= ((instr >> 7) & 0x1) << 6;
-    imm |= ((instr >> 6) & 0x1) << 7;
-    imm |= ((instr >> 9) & 0x3) << 8;
-    imm |= ((instr >> 8) & 0x1) << 10;
-    imm |= ((instr >> 12) & 0x1) << 11;
-    if (imm & 0x800) imm |= 0xFFFFF000;
-    return imm;
+    imm |= ((instr >> 3) & 0x1) << 1;   /* instr[3] → imm[1] */
+    imm |= ((instr >> 4) & 0x1) << 2;   /* instr[4] → imm[2] */
+    imm |= ((instr >> 5) & 0x1) << 3;   /* instr[5] → imm[3] */
+    imm |= ((instr >> 11) & 0x1) << 4;  /* instr[11] → imm[4] */
+    imm |= ((instr >> 2) & 0x1) << 5;   /* instr[2] → imm[5] */
+    imm |= ((instr >> 7) & 0x1) << 6;   /* instr[7] → imm[6] */
+    imm |= ((instr >> 6) & 0x1) << 7;   /* instr[6] → imm[7] */
+    imm |= ((instr >> 9) & 0x1) << 8;   /* instr[9] → imm[8] */
+    imm |= ((instr >> 10) & 0x1) << 9;  /* instr[10] → imm[9] */
+    imm |= ((instr >> 8) & 0x1) << 10;  /* instr[8] → imm[10] */
+    imm |= ((instr >> 12) & 0x1) << 11; /* instr[12] → imm[11] */
+    return sign_extend(imm, 12);  /* 12位符号扩展 */
 }
 
 /**
  * decode_c_b_imm - 解码 C.BEQZ/C.BNEZ 立即数
+ * imm[8:1] 编码：instr[12,11,10,6,5,4,3,2] → imm[8,4,3,7,6,2,1,5]
+ * 注意：imm[0] = 0
  */
 int32_t decode_c_b_imm(uint16_t instr) {
     uint32_t imm = 0;
-    imm |= ((instr >> 2) & 0x1) << 1;
-    imm |= ((instr >> 5) & 0x3) << 2;
-    imm |= ((instr >> 10) & 0x3) << 4;
-    imm |= ((instr >> 12) & 0x1) << 6;
-    imm |= ((instr >> 3) & 0x3) << 7;
-    if (imm & 0x100) imm |= 0xFFFFFF00;
-    return imm;
+    imm |= ((instr >> 3) & 0x1) << 1;   /* instr[3] → imm[1] */
+    imm |= ((instr >> 4) & 0x1) << 2;   /* instr[4] → imm[2] */
+    imm |= ((instr >> 10) & 0x1) << 3;  /* instr[10] → imm[3] */
+    imm |= ((instr >> 11) & 0x1) << 4;  /* instr[11] → imm[4] */
+    imm |= ((instr >> 2) & 0x1) << 5;   /* instr[2] → imm[5] */
+    imm |= ((instr >> 5) & 0x1) << 6;   /* instr[5] → imm[6] */
+    imm |= ((instr >> 6) & 0x1) << 7;   /* instr[6] → imm[7] */
+    imm |= ((instr >> 12) & 0x1) << 8;  /* instr[12] → imm[8] */
+    return sign_extend(imm, 9);
 }
 
 /**
- * decode_c_lwsp_imm - 解码 C.LWSP 立即数
+ * decode_c_lwsp_imm - 解码 C.LWSP/C.FLWSP 立即数
+ * uimm[7:2] 编码：instr[12,11,6,5,4,3] → uimm[7,6,5,4,3,2]
  */
 int32_t decode_c_lwsp_imm(uint16_t instr) {
     uint32_t imm = 0;
-    imm |= ((instr >> 4) & 0x7) << 2;
-    imm |= ((instr >> 10) & 0x7) << 4;
+    imm |= ((instr >> 3) & 0x1) << 2;   /* instr[3] → uimm[2] */
+    imm |= ((instr >> 4) & 0x1) << 3;   /* instr[4] → uimm[3] */
+    imm |= ((instr >> 5) & 0x1) << 4;   /* instr[5] → uimm[4] */
+    imm |= ((instr >> 6) & 0x1) << 5;   /* instr[6] → uimm[5] */
+    imm |= ((instr >> 11) & 0x1) << 6;  /* instr[11] → uimm[6] */
+    imm |= ((instr >> 12) & 0x1) << 7;  /* instr[12] → uimm[7] */
     return imm;
 }
 
 /**
- * decode_c_swsp_imm - 解码 C.SWSP 立即数
+ * decode_c_swsp_imm - 解码 C.SWSP/C.FSWSP 立即数
+ * uimm[7:2] 编码：instr[12,11,9,8,7,6] → uimm[7,6,5,4,3,2]
  */
 int32_t decode_c_swsp_imm(uint16_t instr) {
     uint32_t imm = 0;
-    imm |= ((instr >> 7) & 0x3) << 2;
-    imm |= ((instr >> 9) & 0xF) << 4;
+    imm |= ((instr >> 6) & 0x1) << 2;   /* instr[6] → uimm[2] */
+    imm |= ((instr >> 7) & 0x1) << 3;   /* instr[7] → uimm[3] */
+    imm |= ((instr >> 8) & 0x1) << 4;   /* instr[8] → uimm[4] */
+    imm |= ((instr >> 9) & 0x1) << 5;   /* instr[9] → uimm[5] */
+    imm |= ((instr >> 11) & 0x1) << 6;  /* instr[11] → uimm[6] */
+    imm |= ((instr >> 12) & 0x1) << 7;  /* instr[12] → uimm[7] */
     return imm;
 }
 
@@ -115,6 +141,22 @@ int32_t decode_c_slli_imm(uint16_t instr) {
     uint32_t imm = 0;
     imm |= ((instr >> 2) & 0x1F);
     imm |= ((instr >> 12) & 0x1) << 5;
+    return imm;
+}
+
+/**
+ * decode_c_fldsp_imm - 解码 C.FLDSP 立即数
+ * uimm[8:3] 编码：instr[12,11,10,6,5,4,3] → uimm[8,7,6,5,4,3]
+ */
+int32_t decode_c_fldsp_imm(uint16_t instr) {
+    uint32_t imm = 0;
+    imm |= ((instr >> 3) & 0x1) << 3;   /* instr[3] → uimm[3] */
+    imm |= ((instr >> 4) & 0x1) << 4;   /* instr[4] → uimm[4] */
+    imm |= ((instr >> 5) & 0x1) << 5;   /* instr[5] → uimm[5] */
+    imm |= ((instr >> 6) & 0x1) << 6;   /* instr[6] → uimm[6] */
+    imm |= ((instr >> 10) & 0x1) << 7;  /* instr[10] → uimm[7] */
+    imm |= ((instr >> 11) & 0x1) << 8;  /* instr[11] → uimm[8] */
+    imm |= ((instr >> 12) & 0x1) << 9;  /* instr[12] → uimm[9] (for RV64) */
     return imm;
 }
 
@@ -181,15 +223,19 @@ uint32_t expand_compressed(uint16_t instr) {
                 case 0x0:  /* C.ADDI4SPN */
                     if (instr == 0) return 0;
                     return make_i_type(OP_OP_IMM, rd_prime, 0, 2, decode_c_addi4spn_imm(instr));
+                case 0x1:  /* C.FLD (RV32FC) - 浮点加载双精度 */
+                    return make_i_type(OP_LOAD_FP, rd_prime, 3, rs1_prime, decode_c_lw_imm(instr));
                 case 0x2:  /* C.LW */
                     return make_i_type(OP_LOAD, rd_prime, 2, rs1_prime, decode_c_lw_imm(instr));
                 case 0x3:  /* C.FLW (RV32FC) */
                     return make_i_type(OP_LOAD_FP, rd_prime, 2, rs1_prime, decode_c_lw_imm(instr));
+                case 0x4:  /* C.FSD (RV32DC) - 浮点存储双精度 */
+                    return make_s_type(OP_STORE_FP, rs1_prime, rs2_prime, 3, decode_c_lw_imm(instr));
+                case 0x5:  /* C.FSW (RV32FC) - 浮点存储单精度 */
+                    return make_s_type(OP_STORE_FP, rs1_prime, rs2_prime, 2, decode_c_lw_imm(instr));
                 case 0x6:  /* C.SW */
                     return make_s_type(OP_STORE, rs1_prime, rs2_prime, 2, decode_c_lw_imm(instr));
-                case 0x7:  /* C.FSW (RV32FC) */
-                    return make_s_type(OP_STORE_FP, rs1_prime, rs2_prime, 2, decode_c_lw_imm(instr));
-                default:
+                default:  /* funct3=7 Reserved in RV32 */
                     return 0;
             }
 
@@ -223,41 +269,40 @@ uint32_t expand_compressed(uint16_t instr) {
                         if (imm == 0) return 0;
                         return (OP_LUI) | (rd << 7) | ((imm << 12) & 0xFFFFF000);
                     }
-                case 0x4:  /* C.SRLI / C.SRAI / C.ANDI */
+                case 0x4:  /* C.SRLI / C.SRAI / C.ANDI / C.SUB / C.XOR / C.OR / C.AND */
                     {
                         uint16_t funct2 = (instr >> 10) & 0x3;
                         int rd_c = ((instr >> 7) & 0x7) + 8;
+                        int rs2_c = ((instr >> 2) & 0x7) + 8;
+
                         if (funct2 == 0x0) {  /* C.SRLI */
                             int shamt = decode_c_slli_imm(instr);
                             return make_i_type(OP_OP_IMM, rd_c, 5, rd_c, shamt);
                         } else if (funct2 == 0x1) {  /* C.SRAI */
                             int shamt = decode_c_slli_imm(instr);
                             return make_i_type(OP_OP_IMM, rd_c, 5, rd_c, shamt | 0x400);
-                        } else {  /* C.ANDI */
+                        } else if (funct2 == 0x2) {  /* C.ANDI */
                             int32_t imm = decode_c_li_imm(instr);
                             return make_i_type(OP_OP_IMM, rd_c, 7, rd_c, imm);
+                        } else {  /* funct2 == 0x3: C.SUB / C.XOR / C.OR / C.AND */
+                            uint16_t funct1_12 = (instr >> 5) & 0x3;  /* bits[6:5] determine operation */
+                            if (funct1_12 == 0x0) return make_r_type(OP_OP, rd_c, 0, rd_c, rs2_c, 0x20);  /* SUB */
+                            if (funct1_12 == 0x1) return make_r_type(OP_OP, rd_c, 4, rd_c, rs2_c, 0);    /* XOR */
+                            if (funct1_12 == 0x2) return make_r_type(OP_OP, rd_c, 6, rd_c, rs2_c, 0);    /* OR */
+                            return make_r_type(OP_OP, rd_c, 7, rd_c, rs2_c, 0);  /* AND */
                         }
                     }
-                case 0x5:  /* C.SUB / C.XOR / C.OR / C.AND */
-                    {
-                        int rd_c = ((instr >> 7) & 0x7) + 8;
-                        int rs2_c = ((instr >> 2) & 0x7) + 8;
-                        uint16_t funct2 = (instr >> 10) & 0x3;
-                        if (funct2 == 0x0) return make_r_type(OP_OP, rd_c, 0, rd_c, rs2_c, 0x20);  /* SUB */
-                        if (funct2 == 0x1) return make_r_type(OP_OP, rd_c, 4, rd_c, rs2_c, 0);    /* XOR */
-                        if (funct2 == 0x2) return make_r_type(OP_OP, rd_c, 6, rd_c, rs2_c, 0);    /* OR */
-                        return make_r_type(OP_OP, rd_c, 7, rd_c, rs2_c, 0);  /* AND */
-                    }
-                case 0x6:  /* C.J */
+                case 0x5:  /* C.J - 无条件跳转 */
                     return make_j_type(OP_JAL, 0, decode_c_j_imm(instr));
-                case 0x7:  /* C.BEQZ / C.BNEZ */
+                case 0x6:  /* C.BEQZ - 等于零分支 */
                     {
                         int rs_c = ((instr >> 7) & 0x7) + 8;
-                        if (funct3 == 0x7) {  /* C.BEQZ */
-                            return make_b_type(0, rs_c, 0, decode_c_b_imm(instr));
-                        } else {  /* C.BNEZ */
-                            return make_b_type(1, rs_c, 0, decode_c_b_imm(instr));
-                        }
+                        return make_b_type(0, rs_c, 0, decode_c_b_imm(instr));
+                    }
+                case 0x7:  /* C.BNEZ - 不等于零分支 */
+                    {
+                        int rs_c = ((instr >> 7) & 0x7) + 8;
+                        return make_b_type(1, rs_c, 0, decode_c_b_imm(instr));
                     }
                 default:
                     return 0;
@@ -272,6 +317,8 @@ uint32_t expand_compressed(uint16_t instr) {
                         if (rd == 0) return 0;
                         return make_i_type(OP_OP_IMM, rd, 1, rd, shamt);
                     }
+                case 0x1:  /* C.FLDSP (RV32DC/RV64DC) */
+                    return make_i_type(OP_LOAD_FP, rd, 3, 2, decode_c_fldsp_imm(instr));
                 case 0x2:  /* C.LWSP */
                     return make_i_type(OP_LOAD, rd, 2, 2, decode_c_lwsp_imm(instr));
                 case 0x3:  /* C.FLWSP (RV32FC) */

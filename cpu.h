@@ -7,7 +7,7 @@
 #define CPU_H
 
 #include <stdint.h>
-
+#include "config.h"
 /* ========== 可配置参数 ========== */
 /* 指令内存 (IMEM) */
 #define IMEM_BASE_ADDR  0x1000000   /* 指令内存基地址 */

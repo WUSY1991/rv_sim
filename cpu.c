@@ -13,6 +13,35 @@ extern uint32_t cpu_fetch(CPU *cpu, int *instr_len);
 extern int cpu_execute(CPU *cpu, uint32_t instr, int instr_len);
 extern void cpu_dump(CPU *cpu);
 
+void printv1(uint8_t *buf, uint32_t len, char *s)
+{
+    uint32_t i = 0;
+    uint32_t n = 0;
+    printf("%s:", s);
+    for (i = 0; i < len; i++)
+    {
+        printf("%02x ", buf[i]);
+    }
+    printf("\r\n");
+}
+
+void printv(uint8_t *buf, uint32_t len, char *s)
+{
+    uint32_t i = 0;
+    uint32_t n = 0;
+    printf("%s:", s);
+    for (i = 0; i < len; i++)
+    {
+        if (i % 16 == 0)
+        {
+            printf("\n%08x:", n);
+            n += 16;
+        }
+        printf("%02x ", buf[i]);
+    }
+    printf("\r\n");
+}
+
 /**
  * cpu_init - 初始化 CPU 状态
  * @cpu: CPU 状态结构体指针
@@ -64,13 +93,11 @@ void cpu_init(CPU *cpu) {
  *
  * 返回：0 表示成功，-1 表示失败
  */
-int cpu_load_program(CPU *cpu, const uint32_t *program, size_t size) {
+int cpu_load_program(CPU *cpu, const uint8_t *program, size_t size) {
     if (size > IMEM_SIZE) {
         fprintf(stderr, "[CPU] 程序太大：%lu 字节 (最大 %d)\n", (unsigned long)size, IMEM_SIZE);
         return -1;
     }
-
-
 
     /* 按字节复制到指令内存 */
     memcpy((uint8_t*)cpu->imem, program, size);
@@ -104,7 +131,7 @@ int cpu_load_binary(CPU *cpu, const char *filename) {
     }
 
     /* 读取文件 */
-    uint32_t *prog = malloc(size);
+    uint8_t *prog = malloc(size);
     if (!prog) {
         fprintf(stderr, "[CPU] 内存分配失败\n");
         fclose(f);
@@ -123,6 +150,9 @@ int cpu_load_binary(CPU *cpu, const char *filename) {
     /* 加载到内存 */
     cpu_load_program(cpu, prog, size);
     free(prog);
+
+    printf("load binary 0x%x bytes\n", size);
+    printv(cpu->imem,size,"imem");
 
     return 0;
 }
