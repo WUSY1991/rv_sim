@@ -8,21 +8,7 @@
 
 #include <stdint.h>
 #include "config.h"
-/* ========== 可配置参数 ========== */
-/* 指令内存 (IMEM) */
-#define IMEM_BASE_ADDR  0x1000000   /* 指令内存基地址 */
-#define IMEM_SIZE       (256 * 1024)  /* 指令内存大小 256KB */
-
-/* 数据内存 (DMEM) */
-#define DMEM_BASE_ADDR  0x20000     /* 数据内存基地址 */
-#define DMEM_SIZE       (256 * 1024)  /* 数据内存大小 256KB */
-
-/* PC 复位地址 */
-#define PC_RESET_ADDR   0x1000080   /* PC 复位地址 */
-
-/* ========== UART 虚拟串口 ========== */
-#define UART_TX_ADDR    0x8200      /* 发送寄存器地址 */
-#define UART_RX_ADDR    0x8210      /* 接收寄存器地址 */
+#include "mem.h"  /* 内存配置由 mem.h 提供 */
 
 #define NUM_REGS 32
 #define NUM_FREGS 32
@@ -39,7 +25,8 @@ typedef struct {
 } RType;
 
 typedef struct {
-    uint32_t opcode:7, rd:5, funct3:3, rs1:5, imm:12;
+    uint32_t opcode:7, rd:5, funct3:3, rs1:5;
+    int32_t imm;  /* 立即数需要符号扩展，不能用12位位域 */
 } IType;
 
 typedef struct {
@@ -57,7 +44,7 @@ typedef struct {
 #define C_QUADRANT_3  0x03  /* 32 位标准指令 */
 
 /* CPU 状态结构体 - 包含所有寄存器和状态 */
-typedef struct {
+typedef struct CPU {
     /* 通用寄存器 x0-x31 */
     uint32_t regs[NUM_REGS];
 
@@ -72,6 +59,9 @@ typedef struct {
 
     /* 数据内存 (DMEM) */
     uint32_t dmem[DMEM_SIZE / 4];
+
+    uint32_t breakpoint[4];
+    uint32_t brkctrl;
 
     /* UART 虚拟串口状态 */
     uint8_t uart_tx_char;       /* 待发送字符 */

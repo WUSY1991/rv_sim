@@ -267,7 +267,9 @@ uint32_t expand_compressed(uint16_t instr) {
                     } else {  /* C.LUI */
                         int32_t imm = decode_c_li_imm(instr);
                         if (imm == 0) return 0;
-                        return (OP_LUI) | (rd << 7) | ((imm << 12) & 0xFFFFF000);
+                        /* imm 是 6 位有符号数，左移 12 位放到 LUI 指令的 bits[31:12] */
+                        uint32_t imm_field = (uint32_t)(imm << 12);
+                        return (OP_LUI) | (rd << 7) | imm_field;
                     }
                 case 0x4:  /* C.SRLI / C.SRAI / C.ANDI / C.SUB / C.XOR / C.OR / C.AND */
                     {

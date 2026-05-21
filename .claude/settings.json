@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gcc -Wall -Wextra -g -std=c99 -c main.c -o output/main.o)",
+      "Bash(gcc -Wall -Wextra -g -std=c99 -DDEBUG_TRACE -c cpu.c -o output/cpu.o)",
+      "Bash(gcc -Wall -Wextra -g -std=c99 -c fetch.c -o output/fetch.o)",
+      "Bash(gcc -Wall -Wextra -g -std=c99 -c decode.c -o output/decode.o)",
+      "Bash(gcc -Wall -Wextra -g -std=c99 -c execute.c -o output/execute.o)",
+      "Bash(./rv_sim.exe)",
+      "Bash(echo \"Exit code: $?\")",
+      "Bash(gcc -Wall -Wextra -g -std=c99 -o rv_sim_debug.exe main.c cpu.c fetch.c decode.c execute.c writeback.c -lm)",
+      "Bash(./rv_sim_debug.exe)",
+      "WebFetch(domain:five-embeddev.github.io)",
+      "WebSearch"
+    ]
+  }
+}

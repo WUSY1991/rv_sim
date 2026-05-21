@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gcc -Wall -Wextra -O2 -std=c99 -DTRACE -c execute.c -o output/execute_trace.o)",
+      "Bash(gcc -Wall -Wextra -O2 -std=c99 -c decode.c -o output/decode.o)",
+      "Bash(gcc -Wall -Wextra -O2 -std=c99 -c writeback.c -o output/writeback.o)",
+      "Bash(gcc -o rv_sim_trace.exe output/main.o output/cpu.o output/fetch.o output/decode.o output/execute_trace.o output/writeback.o -lm)",
+      "Bash(./rv_sim_trace.exe tests/test_imacf.bin)",
+      "Bash(./rv_sim_debug.exe tests/test_imacf.bin)",
+      "Bash(make clean *)",
+      "Bash(make)",
+      "Bash(./rv_sim.exe tests/test_c.bin)"
+    ]
+  }
+}

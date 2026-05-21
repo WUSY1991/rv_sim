@@ -9,11 +9,11 @@ LDFLAGS = -lm
 TARGET = rv_sim.exe
 
 # 源文件
-SRCS = main.c cpu.c fetch.c decode.c execute.c writeback.c
+SRCS = main.c cpu.c mem.c fetch.c decode.c execute.c writeback.c
 OBJS = $(SRCS:.c=.o)
 
 # 头文件
-HDRS = cpu.h
+HDRS = cpu.h mem.h config.h
 
 .PHONY: all clean run test debug help
 
