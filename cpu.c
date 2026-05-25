@@ -97,15 +97,8 @@ void cpu_init(CPU *cpu) {
  * 返回：0 表示成功，-1 表示失败
  */
 int cpu_load_program(CPU *cpu, const uint8_t *program, size_t size) {
-    if (size > IMEM_SIZE) {
-        fprintf(stderr, "[CPU] 程序太大：%lu 字节 (最大 %d)\n", (unsigned long)size, IMEM_SIZE);
-        return -1;
-    }
-
-    /* 按字节复制到指令内存 */
-    memcpy((uint8_t*)cpu->imem, program, size);
-
-    return 0;
+    /* 使用统一内存模块加载到 IMEM 基地址 */
+    return mem_load_program(cpu, program, size, IMEM_BASE_ADDR);
 }
 
 /**
@@ -150,14 +143,14 @@ int cpu_load_binary(CPU *cpu, const char *filename) {
         return -1;
     }
 
-    /* 加载到内存 */
-    cpu_load_program(cpu, prog, size);
+    /* 加载到内存 (使用统一内存模块) */
+    int ret = mem_load_program(cpu, prog, size, IMEM_BASE_ADDR);
     free(prog);
 
     printf("load binary 0x%x bytes\n", size);
-    printv(cpu->imem,size,"imem");
+    printv((uint8_t*)cpu->imem, size, "imem");
 
-    return 0;
+    return ret;
 }
 
 /**

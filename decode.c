@@ -325,13 +325,14 @@ uint32_t expand_compressed(uint16_t instr) {
                     return make_i_type(OP_LOAD, rd, 2, 2, decode_c_lwsp_imm(instr));
                 case 0x3:  /* C.FLWSP (RV32FC) */
                     return make_i_type(OP_LOAD_FP, rd, 2, 2, decode_c_lwsp_imm(instr));
-                case 0x4:  /* C.JR / C.MV */
+                case 0x4:  /* C.JR / C.MV / C.ADD */
                     if (rs2 == 0) {  /* C.JR */
                         return make_i_type(OP_JALR, 0, 0, rd, 0);
                     } else if ((instr >> 12) & 0x1) {  /* C.ADD (bit12=1) */
                         return make_r_type(OP_OP, rd, 0, rd, rs2, 0);
                     } else {  /* C.MV (bit12=0) */
-                        return make_i_type(OP_OP_IMM, rd, 0, 0, rs2);
+                        /* C.MV rd, rs2 -> add rd, x0, rs2 */
+                        return make_r_type(OP_OP, rd, 0, 0, rs2, 0);
                     }
                 case 0x5:  /* C.EBREAK / C.JALR */
                     if (instr == 0xA002) {  /* C.EBREAK */
