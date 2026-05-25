@@ -44,7 +44,7 @@ int mem_is_valid(uint32_t addr) {
  */
 uint32_t mem_read(CPU *cpu, uint32_t addr, int size) {
 
-    uint32_t ret;
+    uint32_t ret = 0;
     /* UART RX */
     if (addr == UART_RX_ADDR) {
         if (cpu->uart_rx_valid) {
@@ -84,6 +84,13 @@ END:
 #ifdef MEM_TRACE
      printf("    [mr:0x%08x] 0x%08x-%d\n", addr, ret,size);
 #endif
+    for(int i = 0; i < 4; i++)
+    {
+        if(addr == cpu->breakpoint[i] && (cpu->brkctrl[i] & 0x03) == 0x02 )
+        {
+            printf("pc:0x%08x halt:0x%08x \n", cpu->pc, cpu->breakpoint[i]);
+        }
+    }
     return ret;  /* 未映射区域 */
 }
 
@@ -100,6 +107,14 @@ void mem_write(CPU *cpu, uint32_t addr, uint32_t value, int size) {
 #ifdef MEM_TRACE
      printf("    [mw:0x%08x] 0x%08x-%d\n", addr, value, size);
 #endif
+    for(int i = 0; i < 4; i++)
+    {
+        if(addr == cpu->breakpoint[i] && (cpu->brkctrl[i] & 0x03) == 0x01 )
+        {
+            printf("pc:0x%08x halt:0x%08x \n", cpu->pc, cpu->breakpoint[i]);
+        }
+    }
+
     /* UART TX */
     if (addr == UART_TX_ADDR) {
         cpu->uart_tx_char = value & 0xFF;

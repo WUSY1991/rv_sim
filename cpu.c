@@ -84,8 +84,17 @@ void cpu_init(CPU *cpu) {
     /* x0 硬连线为 0 */
     cpu->regs[0] = 0;
 
-    cpu->breakpoint[0] = 0x1000c08;
-    cpu->brkctrl = 0x03;
+    cpu->breakpoint[0] = 0x1000c96;
+    cpu->brkctrl[0] = 0x03;
+
+    cpu->breakpoint[1] = 0x1000bf2;
+    cpu->brkctrl[1] = 0x03;
+
+    cpu->breakpoint[2] = 0x1feb8;
+    cpu->brkctrl[2] = 0x01;
+
+    cpu->breakpoint[3] = 0x1feb8;
+    cpu->brkctrl[3] = 0x02;
 }
 
 /**
@@ -153,6 +162,18 @@ int cpu_load_binary(CPU *cpu, const char *filename) {
     return ret;
 }
 
+
+int8_t cpu_halt_det(CPU *cpu)
+{
+    for(int i = 0; i < 4; i++)
+    {
+        if(cpu->pc == cpu->breakpoint[i] && (cpu->brkctrl[i] & 0x03) == 0x03 )
+        {
+            return 1;
+        }
+    }
+    return 0;
+}
 /**
  * cpu_run - 运行 CPU
  * @cpu: CPU 状态结构体指针
@@ -181,7 +202,12 @@ void cpu_run(CPU *cpu, int max_cycles) {
 #ifdef DEBUG_TRACE
         printf("\r\n[0x%08x] 0x%08x (len=%d)", cpu->pc, instr, instr_len);
 #endif
-        if(cpu->pc == cpu->breakpoint[0] && (cpu->brkctrl & 0x03) == 0x03){
+        for(int i = 0; i < 4; i++)
+        {
+            if(cpu->pc == cpu->breakpoint[i] && (cpu->brkctrl[i] & 0x03) == 0x03 )
+            {
+                printf("\n");
+            }
         }
         /* 执行 (包含译码和写回) */
         int result = cpu_execute(cpu, instr, instr_len);

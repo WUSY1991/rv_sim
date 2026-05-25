@@ -61,7 +61,7 @@ typedef struct CPU {
     uint32_t dmem[DMEM_SIZE / 4];
 
     uint32_t breakpoint[4];
-    uint32_t brkctrl;
+    uint32_t brkctrl[4];
 
     /* UART 虚拟串口状态 */
     uint8_t uart_tx_char;       /* 待发送字符 */

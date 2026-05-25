@@ -565,7 +565,10 @@ int cpu_execute(CPU *cpu, uint32_t instr, int instr_len) {
                     case 0x7: taken = ((uint32_t)rs1 >= (uint32_t)rs2); break; /* BGEU */
                 }
 
-                cpu->pc += taken ? imm : 4;
+                printf("[BRANCH] PC=0x%08x instr=0x%08x funct3=%d rs1=%d rs2=%d imm=%d taken=%d\n",
+                       cpu->pc, expanded_instr, funct3, s_inst.rs1, s_inst.rs2, imm, taken);
+
+                cpu->pc += taken ? imm : actual_len;
             }
             break;
 
@@ -573,6 +576,8 @@ int cpu_execute(CPU *cpu, uint32_t instr, int instr_len) {
         case OP_JALR:
             {
                 uint32_t target = (cpu->regs[i_inst.rs1] + i_inst.imm) & ~1;
+                printf("[JALR] PC=0x%08x rs1=%d rs1_val=0x%08x imm=%d target=0x%08x\n",
+                       cpu->pc, i_inst.rs1, cpu->regs[i_inst.rs1], i_inst.imm, target);
                 cpu->regs[i_inst.rd] = cpu->pc + actual_len;
                 cpu->pc = target;
             }
