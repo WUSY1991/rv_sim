@@ -45,8 +45,21 @@ typedef struct {
 
 /* CPU 状态结构体 - 包含所有寄存器和状态 */
 typedef struct CPU {
-    /* 通用寄存器 x0-x31 */
-    uint32_t regs[NUM_REGS];
+    union {
+        uint32_t regs[NUM_REGS];  /* 数组访问：cpu->regs[idx] */
+        struct {
+            uint32_t zero;        /* x0 - 硬连线为 0 */
+            uint32_t ra;          /* x1 - 返回地址 */
+            uint32_t sp;          /* x2 - 栈指针 */
+            uint32_t gp;          /* x3 - 全局指针 */
+            uint32_t tp;          /* x4 - 线程指针 */
+            uint32_t t0, t1, t2;  /* x5-x7 - 临时寄存器 */
+            uint32_t s0, s1;      /* x8-x9 - 保存寄存器 */
+            uint32_t a0, a1, a2, a3, a4, a5, a6, a7;  /* x10-x17 - 参数寄存器 */
+            uint32_t s2, s3, s4, s5, s6, s7, s8, s9, s10, s11;  /* x18-x27 */
+            uint32_t t3, t4, t5, t6;  /* x28-x31 - 临时寄存器 */
+        };  /* 别名访问：cpu->sp, cpu->ra 等 */
+    };  /* 匿名 union，成员可直接访问 */
 
     /* 浮点寄存器 f0-f31 */
     Float32 fregs[NUM_FREGS];

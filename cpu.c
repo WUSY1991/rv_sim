@@ -187,7 +187,7 @@ void cpu_run(CPU *cpu, int max_cycles) {
     printf("========================================\n");
     printf("  RISC-V RV32IMACFC 模拟器\n");
     printf("========================================\n\n");
-    printf("开始执行 (PC=0x%08x)...\n\n", cpu->pc);
+    printf("开始执行 (PC=0x%08x, RA=0x%08x)...\n\n", cpu->pc,cpu->ra);
 
     while (cycles < max_cycles && !cpu->halted) {
         /* 取指 */
