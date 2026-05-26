@@ -3,6 +3,6 @@
 
 /* 关闭调试输出 */
 // #define DEBUG_FETCH
-#define MEM_TRACE
+// #define MEM_TRACE
 
 #endif

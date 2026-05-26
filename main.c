@@ -29,7 +29,7 @@ static const uint32_t test_program[] = {
     0x00300313,  /* addi  x6, x0, 3        ; x6 = 3 */
     0x0262D3B3,  /* divu  x7, x5, x6       ; x7 = 8 / 3 = 2 */
     0x0262F433,  /* remu  x8, x5, x6       ; x8 = 8 % 3 = 2 */
-    
+
     /* ========== F 扩展测试 (浮点运算) ========== */
     0x00300113,  /* addi  x2, x0, 3        ; x2 = 3 */
     0x00200193,  /* addi  x3, x0, 2        ; x3 = 2 */
@@ -57,7 +57,7 @@ static const uint32_t test_program[] = {
     0x1C00A5D3,  /* flt.s x11, f0, f1      ; x11 = (3.0 < 2.0) = 0 */
     0x1C002653,  /* feq.s x12, f0, f1      ; x12 = (3.0 == 2.0) = 0 */
     0x1C0126D3,  /* feq.s x13, f1, f2      ; x13 = (2.0 == 1.0) = 0 */
-    
+
     /* ========== 基础整数运算测试 ========== */
     0x00A00793,  /* addi  x15, x0, 10      ; x15 = 10 */
     0x00B00813,  /* addi  x16, x0, 11      ; x16 = 11 */
@@ -67,13 +67,13 @@ static const uint32_t test_program[] = {
     0x08F7CA33,  /* xor   x20, x15, x16    ; x20 = 10 ^ 11 = 1 */
     0x08F7EAB3,  /* or    x21, x15, x16    ; x21 = 10 | 11 = 11 */
     0x08F7FB33,  /* and   x22, x15, x16    ; x22 = 10 & 11 = 10 */
-    
+
     /* ========== 分支和跳转测试 ========== */
     0x0040006F,  /* j     skip1            ; 跳转到 skip1 (偏移 4) */
     0x06400B93,  /* addi  x23, x0, 100     ; 这行不会被执行 */
     /* skip1: */
     0x00F00C13,  /* addi  x24, x0, 15      ; x24 = 15 */
-    
+
     /* ECALL 结束 */
     0x00000073,  /* ecall                  ; 系统调用，结束程序 */
 };
@@ -125,10 +125,10 @@ int main(int argc, char *argv[]) {
             return 1;
         }
     }
-    
+
     /* 初始化 CPU */
     cpu_init(&cpu);
-    
+
     /* 加载程序 */
     if (run_test || filename == NULL) {
         /* 运行内置测试程序 */
@@ -141,9 +141,9 @@ int main(int argc, char *argv[]) {
             return 1;
         }
     }
-    
+
     /* 运行 CPU */
     cpu_run(&cpu, 1000*10000);
-    
+
     return 0;
 }

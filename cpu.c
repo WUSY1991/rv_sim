@@ -157,7 +157,7 @@ int cpu_load_binary(CPU *cpu, const char *filename) {
     free(prog);
 
     printf("load binary 0x%x bytes\n", size);
-    printv((uint8_t*)cpu->imem, size, "imem");
+    // printv((uint8_t*)cpu->imem, size, "imem");
 
     return ret;
 }
