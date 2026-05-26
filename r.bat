@@ -1,2 +1,2 @@
 
-rv_sim ../proj_test/output/out.bin
+rv_sim tests/proj_test/output/out.bin

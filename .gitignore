@@ -7,7 +7,8 @@ tests/test_m
 tests/test_f
 tests/test_a
 tests/test_base
-
+tests/single_test
+tests/proj_test/output
 # 测试二进制
 *.bin
 !test_fpu.bin
