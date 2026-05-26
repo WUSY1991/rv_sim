@@ -60,10 +60,17 @@ typedef struct CPU {
             uint32_t t3, t4, t5, t6;  /* x28-x31 - 临时寄存器 */
         };  /* 别名访问：cpu->sp, cpu->ra 等 */
     };  /* 匿名 union，成员可直接访问 */
-
-    /* 浮点寄存器 f0-f31 */
-    Float32 fregs[NUM_FREGS];
-
+    union {
+        /* 浮点寄存器 f0-f31 */
+        Float32 fregs[NUM_FREGS];
+        struct {
+            Float32 ft0, ft1, ft2, ft3, ft4, ft5, ft6, ft7;
+            Float32 fs0, fs1;
+            Float32 fa0, fa1, fa2, fa3, fa4, fa5, fa6, fa7;
+            Float32 fs2, fs3, fs4, fs5, fs6, fs7, fs8, fs9, fs10, fs11;
+            Float32 ft8, ft9, ft10, ft11, ft12, ft13, ft14, ft15;
+        };
+    };
     /* 程序计数器 */
     uint32_t pc;
 
