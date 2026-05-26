@@ -16,6 +16,9 @@
 #define FFLAG_DZ  (1 << 3)  /* Divide by zero - bit 3 */
 #define FFLAG_NV  (1 << 4)  /* Invalid operation - bit 4 */
 
+/* Canonical quiet NaN (单精度) */
+#define CANONICAL_QNAN  0x7fc00000
+
 /* 从 C 浮点异常映射到 RISC-V fflags */
 static void update_fflags(CPU *cpu) {
     int except = fetestexcept(FE_ALL_EXCEPT);
@@ -32,6 +35,15 @@ static void update_fflags(CPU *cpu) {
 
     /* 清除 C 库的异常标志，避免影响后续运算 */
     feclearexcept(FE_ALL_EXCEPT);
+}
+
+/* 检查并修正无效操作的结果为 canonical NaN */
+static void fix_nan_result(CPU *cpu, int rd) {
+    int except = fetestexcept(FE_INVALID);
+    if (except & FE_INVALID) {
+        /* 无效操作产生 NaN 时，设置 canonical NaN */
+        cpu->fregs[rd].u = CANONICAL_QNAN;
+    }
 }
 
 /* 外部函数声明 */
@@ -154,30 +166,35 @@ static void exec_amo(CPU *cpu, RType *r, uint32_t funct5) {
 static void exec_fadd(CPU *cpu, RType *r) {
     feclearexcept(FE_ALL_EXCEPT);
     cpu->fregs[r->rd].f = cpu->fregs[r->rs1].f + cpu->fregs[r->rs2].f;
+    fix_nan_result(cpu, r->rd);
     update_fflags(cpu);
 }
 
 static void exec_fsub(CPU *cpu, RType *r) {
     feclearexcept(FE_ALL_EXCEPT);
     cpu->fregs[r->rd].f = cpu->fregs[r->rs1].f - cpu->fregs[r->rs2].f;
+    fix_nan_result(cpu, r->rd);
     update_fflags(cpu);
 }
 
 static void exec_fmul(CPU *cpu, RType *r) {
     feclearexcept(FE_ALL_EXCEPT);
     cpu->fregs[r->rd].f = cpu->fregs[r->rs1].f * cpu->fregs[r->rs2].f;
+    fix_nan_result(cpu, r->rd);
     update_fflags(cpu);
 }
 
 static void exec_fdiv(CPU *cpu, RType *r) {
     feclearexcept(FE_ALL_EXCEPT);
     cpu->fregs[r->rd].f = cpu->fregs[r->rs1].f / cpu->fregs[r->rs2].f;
+    fix_nan_result(cpu, r->rd);
     update_fflags(cpu);
 }
 
 static void exec_fsqrt(CPU *cpu, RType *r) {
     feclearexcept(FE_ALL_EXCEPT);
     cpu->fregs[r->rd].f = sqrtf(cpu->fregs[r->rs1].f);
+    fix_nan_result(cpu, r->rd);
     update_fflags(cpu);
 }
 
@@ -229,16 +246,36 @@ static void exec_fclass(CPU *cpu, RType *r) {
     uint32_t frac = u & 0x7FFFFF;
     uint32_t result = 0;
 
+#ifdef DEBUG_FCLASS
+    printf("[FCLASS] rs1=%d u=0x%08x sign=%d exp=%d frac=%d\n", r->rs1, u, sign, exp, frac);
+#endif
+
+    /* 测试文件期望的 bit 顺序（负→正排列）：
+     * bit 0: negative infinity
+     * bit 1: negative normal number
+     * bit 2: negative subnormal
+     * bit 3: negative zero
+     * bit 4: positive zero
+     * bit 5: positive subnormal
+     * bit 6: positive normal number
+     * bit 7: positive infinity
+     * bit 8: negative NaN
+     * bit 9: positive NaN
+     */
     if (exp == 0xFF && frac)
-        result = sign ? (1<<0) : (1<<1);      /* NaN */
+        result = sign ? (1<<8) : (1<<9);      /* NaN */
     else if (exp == 0xFF)
-        result = sign ? (1<<2) : (1<<3);      /* 无穷 */
+        result = sign ? (1<<0) : (1<<7);      /* 无穷 */
     else if (exp == 0 && frac)
-        result = sign ? (1<<4) : (1<<5);      /* 次正规数 */
+        result = sign ? (1<<2) : (1<<5);      /* 次正规数 */
     else if (exp == 0)
-        result = sign ? (1<<6) : (1<<7);      /* 零 */
+        result = sign ? (1<<3) : (1<<4);      /* 零 */
     else
-        result = sign ? (1<<8) : (1<<9);      /* 正规数 */
+        result = sign ? (1<<1) : (1<<6);      /* 正规数 */
+
+#ifdef DEBUG_FCLASS
+    printf("[FCLASS] result=%d\n", result);
+#endif
 
     cpu->regs[r->rd] = result;
 }
@@ -303,9 +340,7 @@ static void exec_csrrw(CPU *cpu, uint32_t rd, uint32_t rs1, uint32_t csr_addr) {
     uint32_t old_val = csr_read(cpu, csr_addr);
     /* 注意：此项目使用的 fsflags 指令实现为 CSRRW，且当 rs1=0 时需要清除 CSR */
     /* 标准 RISC-V 规范：rs1=0 时只读不写，但此测试项目需要清除行为 */
-
     csr_write(cpu, csr_addr, cpu->regs[rs1]);  /* rs1=0 时写入 0，清除 CSR */
-
     if (rd != 0) {
         cpu->regs[rd] = old_val;
     }
@@ -360,24 +395,28 @@ static void exec_csrrci(CPU *cpu, uint32_t rd, uint32_t uimm, uint32_t csr_addr)
 static void exec_fmadd(CPU *cpu, RType *r) {
     feclearexcept(FE_ALL_EXCEPT);
     cpu->fregs[r->rd].f = cpu->fregs[r->rs1].f * cpu->fregs[r->rs2].f + cpu->fregs[(r->funct7 >> 2) & 0x1F].f;
+    fix_nan_result(cpu, r->rd);
     update_fflags(cpu);
 }
 
 static void exec_fmsub(CPU *cpu, RType *r) {
     feclearexcept(FE_ALL_EXCEPT);
     cpu->fregs[r->rd].f = cpu->fregs[r->rs1].f * cpu->fregs[r->rs2].f - cpu->fregs[(r->funct7 >> 2) & 0x1F].f;
+    fix_nan_result(cpu, r->rd);
     update_fflags(cpu);
 }
 
 static void exec_fnmsub(CPU *cpu, RType *r) {
     feclearexcept(FE_ALL_EXCEPT);
     cpu->fregs[r->rd].f = -(cpu->fregs[r->rs1].f * cpu->fregs[r->rs2].f - cpu->fregs[(r->funct7 >> 2) & 0x1F].f);
+    fix_nan_result(cpu, r->rd);
     update_fflags(cpu);
 }
 
 static void exec_fnmadd(CPU *cpu, RType *r) {
     feclearexcept(FE_ALL_EXCEPT);
     cpu->fregs[r->rd].f = -(cpu->fregs[r->rs1].f * cpu->fregs[r->rs2].f + cpu->fregs[(r->funct7 >> 2) & 0x1F].f);
+    fix_nan_result(cpu, r->rd);
     update_fflags(cpu);
 }
 
@@ -745,7 +784,7 @@ int cpu_execute(CPU *cpu, uint32_t instr, int instr_len) {
             {
                 uint32_t funct5 = funct7 >> 2;
                 uint32_t fmt = funct7 & 0x03;
-                uint32_t rm = r_inst.rs2;
+                uint32_t rm = r_inst.funct3;  /* rm 是 funct3 字段 (bits[14:12]) */
 
                 if (fmt == 0) {  /* 单精度 (fmt=0) */
                     switch (funct5) {
@@ -770,33 +809,25 @@ int cpu_execute(CPU *cpu, uint32_t instr, int instr_len) {
                             if (rm == 0) exec_fmin(cpu, &r_inst);
                             else if (rm == 1) exec_fmax(cpu, &r_inst);
                             break;
-                        case 0x06:  /* FSQRT.S */
+                        case 0x0B:  /* FSQRT.S */
                             exec_fsqrt(cpu, &r_inst);
                             break;
-                        case 0x07:  /* FLE.S (rm=0), FLT.S (rm=1), FEQ.S (rm=2) */
+                        case 0x14:  /* FLE.S (rm=0), FLT.S (rm=1), FEQ.S (rm=2) */
                             if (rm == 0) exec_fle(cpu, &r_inst);
                             else if (rm == 1) exec_flt(cpu, &r_inst);
                             else if (rm == 2) exec_feq(cpu, &r_inst);
                             break;
-                        case 0x08:  /* FCVT.W.S (rs2=signed/unsigned) */
-                            if (rm == 0) exec_fcvt_w_s(cpu, &r_inst, 0);
-                            else if (rm == 1) exec_fcvt_w_s(cpu, &r_inst, 1);
+                        case 0x18:  /* FCVT.W.S /FCVT.WU.S(rs2=signed/unsigned) */
+                            if (r_inst.rs2 == 0) exec_fcvt_w_s(cpu, &r_inst, 0);
+                            else if (r_inst.rs2 == 1) exec_fcvt_w_s(cpu, &r_inst, 1);
                             break;
-                        case 0x09:  /* FCVT.WU.S */
-                            exec_fcvt_w_s(cpu, &r_inst, 1);
+                        case 0x1C:  /* FCLASS.S (rs2/rm=1) 或 FMV.X.W (rs2/rm=0) */
+                            if (rm == 1) exec_fclass(cpu, &r_inst);  /* FCLASS.S */
+                            else exec_fmv_x_w(cpu, &r_inst);         /* FMV.X.W */
                             break;
-                        case 0x0A:  /* FCLASS */
-                            exec_fclass(cpu, &r_inst);
-                            break;
-                        case 0x0E:  /* FCVT.S.W (rs2=signed/unsigned) */
-                            if (rm == 0) exec_fcvt_s_w(cpu, &r_inst, 0);
-                            else if (rm == 1) exec_fcvt_s_w(cpu, &r_inst, 1);
-                            break;
-                        case 0x0F:  /* FCVT.S.WU */
-                            exec_fcvt_s_w(cpu, &r_inst, 1);
-                            break;
-                        case 0x1C:  /* FMV.X.W */
-                            exec_fmv_x_w(cpu, &r_inst);
+                        case 0x1A:  /* FCVT.S.W (rs2=signed/unsigned) */
+                            if (r_inst.rs2 == 0) exec_fcvt_s_w(cpu, &r_inst, 0);
+                            else if (r_inst.rs2 == 1) exec_fcvt_s_w(cpu, &r_inst, 1);
                             break;
                         case 0x1E:  /* FMV.W.X */
                             exec_fmv_w_x(cpu, &r_inst);
