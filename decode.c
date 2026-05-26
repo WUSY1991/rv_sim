@@ -22,28 +22,28 @@ int c_reg_map(int reg) {
  */
 int32_t decode_c_addi4spn_imm(uint16_t instr) {
     uint32_t imm = 0;
-    imm |= ((instr >> 5) & 0x1) << 6;   /* inst[5] → nzuimm[6] */
-    imm |= ((instr >> 6) & 0x1) << 7;   /* inst[6] → nzuimm[7] */
-    imm |= ((instr >> 7) & 0x1) << 8;   /* inst[7] → nzuimm[8] */
-    imm |= ((instr >> 8) & 0x1) << 9;   /* inst[8] → nzuimm[9] */
-    imm |= ((instr >> 9) & 0x1) << 2;   /* inst[9] → nzuimm[2] */
-    imm |= ((instr >> 10) & 0x1) << 3;  /* inst[10] → nzuimm[3] */
-    imm |= ((instr >> 11) & 0x1) << 4;  /* inst[11] → nzuimm[4] */
-    imm |= ((instr >> 12) & 0x1) << 5;  /* inst[12] → nzuimm[5] */
+    imm |= ((instr >> 5) & 0x1) << 3;
+    imm |= ((instr >> 6) & 0x1) << 2;
+    imm |= ((instr >> 7) & 0x1) << 6;
+    imm |= ((instr >> 8) & 0x1) << 7;
+    imm |= ((instr >> 9) & 0x1) << 8;
+    imm |= ((instr >> 10) & 0x1) << 9;
+    imm |= ((instr >> 11) & 0x1) << 4;
+    imm |= ((instr >> 12) & 0x1) << 5;
     return imm;
 }
 
 /**
  * decode_c_lw_imm - 解码 C.LW/C.FLW 立即数
- * uimm[7:2] 编码：instr[6,5,12,11,10] → uimm[7,6,5,4,3]
+ * uimm[6:2] 编码：instr[6,5,12,11,10] → uimm[7,6,5,4,3]
  */
 int32_t decode_c_lw_imm(uint16_t instr) {
     uint32_t imm = 0;
-    imm |= ((instr >> 10) & 0x1) << 3;  /* instr[10] → uimm[3] */
-    imm |= ((instr >> 11) & 0x1) << 4;  /* instr[11] → uimm[4] */
     imm |= ((instr >> 12) & 0x1) << 5;  /* instr[12] → uimm[5] */
+    imm |= ((instr >> 11) & 0x1) << 4;  /* instr[11] → uimm[4] */
+    imm |= ((instr >> 10) & 0x1) << 3;  /* instr[10] → uimm[3] */
+    imm |= ((instr >> 6) & 0x1) << 2;   /* instr[6] → uimm[2] */
     imm |= ((instr >> 5) & 0x1) << 6;   /* instr[5] → uimm[6] */
-    imm |= ((instr >> 6) & 0x1) << 7;   /* instr[6] → uimm[7] */
     return imm;
 }
 
@@ -73,17 +73,17 @@ int32_t decode_c_li_imm(uint16_t instr) {
  */
 int32_t decode_c_j_imm(uint16_t instr) {
     uint32_t imm = 0;
-    imm |= ((instr >> 11) & 0x1) << 1;   /* inst[11] → imm[1] */
-    imm |= ((instr >> 3) & 0x1) << 2;    /* inst[3] → imm[2] */
-    imm |= ((instr >> 4) & 0x1) << 3;    /* inst[4] → imm[3] */
-    imm |= ((instr >> 5) & 0x1) << 4;    /* inst[5] → imm[4] */
-    imm |= ((instr >> 2) & 0x1) << 5;    /* inst[2] → imm[5] */
-    imm |= ((instr >> 7) & 0x1) << 6;    /* inst[7] → imm[6] */
-    imm |= ((instr >> 6) & 0x1) << 7;    /* inst[6] → imm[7] */
-    imm |= ((instr >> 9) & 0x1) << 8;    /* inst[9] → imm[8] */
-    imm |= ((instr >> 10) & 0x1) << 9;   /* inst[10] → imm[9] */
-    imm |= ((instr >> 8) & 0x1) << 10;   /* inst[8] → imm[10] */
     imm |= ((instr >> 12) & 0x1) << 11;  /* inst[12] → imm[11] */
+    imm |= ((instr >> 11) & 0x1) << 4;   /* inst[11] → imm[1] */
+    imm |= ((instr >> 10) & 0x1) << 9;   /* inst[10] → imm[9] */
+    imm |= ((instr >>  9) & 0x1) << 8;    /* inst[9] → imm[8] */
+    imm |= ((instr >>  8) & 0x1) << 10;   /* inst[8] → imm[10] */
+    imm |= ((instr >>  7) & 0x1) << 6;    /* inst[7] → imm[6] */
+    imm |= ((instr >>  6) & 0x1) << 7;    /* inst[6] → imm[7] */
+    imm |= ((instr >>  5) & 0x1) << 3;    /* inst[5] → imm[4] */
+    imm |= ((instr >>  4) & 0x1) << 2;    /* inst[4] → imm[3] */
+    imm |= ((instr >>  3) & 0x1) << 1;    /* inst[3] → imm[2] */
+    imm |= ((instr >>  2) & 0x1) << 5;    /* inst[2] → imm[5] */
     return sign_extend(imm, 12);  /* 12位符号扩展 */
 }
 
@@ -94,14 +94,14 @@ int32_t decode_c_j_imm(uint16_t instr) {
  */
 int32_t decode_c_b_imm(uint16_t instr) {
     uint32_t imm = 0;
-    imm |= ((instr >> 3) & 0x1) << 1;   /* instr[3] → imm[1] */
-    imm |= ((instr >> 4) & 0x1) << 2;   /* instr[4] → imm[2] */
-    imm |= ((instr >> 10) & 0x1) << 3;  /* instr[10] → imm[3] */
-    imm |= ((instr >> 11) & 0x1) << 4;  /* instr[11] → imm[4] */
-    imm |= ((instr >> 2) & 0x1) << 5;   /* instr[2] → imm[5] */
-    imm |= ((instr >> 5) & 0x1) << 6;   /* instr[5] → imm[6] */
-    imm |= ((instr >> 6) & 0x1) << 7;   /* instr[6] → imm[7] */
     imm |= ((instr >> 12) & 0x1) << 8;  /* instr[12] → imm[8] */
+    imm |= ((instr >> 11) & 0x1) << 4;  /* instr[11] → imm[4] */
+    imm |= ((instr >> 10) & 0x1) << 3;  /* instr[10] → imm[3] */
+    imm |= ((instr >> 6) & 0x1) << 7;   /* instr[6] → imm[7] */
+    imm |= ((instr >> 5) & 0x1) << 6;   /* instr[5] → imm[6] */
+    imm |= ((instr >> 4) & 0x1) << 2;   /* instr[4] → imm[2] */
+    imm |= ((instr >> 3) & 0x1) << 1;   /* instr[3] → imm[1] */
+    imm |= ((instr >> 2) & 0x1) << 5;   /* instr[2] → imm[5] */
     return sign_extend(imm, 9);
 }
 
@@ -111,12 +111,12 @@ int32_t decode_c_b_imm(uint16_t instr) {
  */
 int32_t decode_c_lwsp_imm(uint16_t instr) {
     uint32_t imm = 0;
-    imm |= ((instr >> 4) & 0x1) << 2;   /* inst[4] → uimm[2] */
-    imm |= ((instr >> 5) & 0x1) << 3;   /* inst[5] → uimm[3] */
-    imm |= ((instr >> 6) & 0x1) << 4;   /* inst[6] → uimm[4] */
     imm |= ((instr >> 12) & 0x1) << 5;  /* inst[12] → uimm[5] */
-    imm |= ((instr >> 2) & 0x1) << 6;   /* inst[3] → uimm[6] */
-    imm |= ((instr >> 3) & 0x1) << 7;   /* inst[2] → uimm[7] */
+    imm |= ((instr >>  6) & 0x1) << 4;   /* inst[6] → uimm[4] */
+    imm |= ((instr >>  5) & 0x1) << 3;   /* inst[5] → uimm[3] */
+    imm |= ((instr >>  4) & 0x1) << 2;   /* inst[4] → uimm[2] */
+    imm |= ((instr >>  3) & 0x1) << 7;   /* inst[2] → uimm[7] */
+    imm |= ((instr >>  2) & 0x1) << 6;   /* inst[3] → uimm[6] */
     return imm;
 }
 
@@ -126,12 +126,12 @@ int32_t decode_c_lwsp_imm(uint16_t instr) {
  */
 int32_t decode_c_swsp_imm(uint16_t instr) {
     uint32_t imm = 0;
-    imm |= ((instr >> 9)  & 0x1) << 2;  /* inst[9] → uimm[2] */
-    imm |= ((instr >> 10) & 0x1) << 3;  /* inst[10] → uimm[3] */
-    imm |= ((instr >> 11) & 0x1) << 4;  /* inst[11] → uimm[4] */
     imm |= ((instr >> 12) & 0x1) << 5;  /* inst[12] → uimm[5] */
-    imm |= ((instr >> 7)  & 0x1) << 6;  /* inst[7] → uimm[6] */
+    imm |= ((instr >> 11) & 0x1) << 4;  /* inst[11] → uimm[4] */
+    imm |= ((instr >> 10) & 0x1) << 3;  /* inst[10] → uimm[3] */
+    imm |= ((instr >> 9)  & 0x1) << 2;  /* inst[9] → uimm[2] */
     imm |= ((instr >> 8)  & 0x1) << 7;  /* inst[8] → uimm[7] */
+    imm |= ((instr >> 7)  & 0x1) << 6;  /* inst[7] → uimm[6] */
     return imm;
 }
 
@@ -152,12 +152,12 @@ int32_t decode_c_slli_imm(uint16_t instr) {
  */
 int32_t decode_c_fldsp_imm(uint16_t instr) {
     uint32_t offset = 0;
-    offset |= ((instr >> 4) & 0x1) << 6;   /* inst[4] → uimm[3] → offset[6] */
-    offset |= ((instr >> 5) & 0x1) << 7;   /* inst[5] → uimm[4] → offset[7] */
-    offset |= ((instr >> 6) & 0x1) << 8;   /* inst[6] → uimm[5] → offset[8] */
-    offset |= ((instr >> 10) & 0x1) << 9;  /* inst[10] → uimm[6] → offset[9] */
-    offset |= ((instr >> 11) & 0x1) << 10; /* inst[11] → uimm[7] → offset[10] */
-    offset |= ((instr >> 12) & 0x1) << 11; /* inst[12] → uimm[8] → offset[11] */
+    offset |= ((instr >> 12) & 0x1) << 5;
+    offset |= ((instr >>  6) & 0x1) << 4;
+    offset |= ((instr >>  5) & 0x1) << 3;
+    offset |= ((instr >>  4) & 0x1) << 8;
+    offset |= ((instr >>  3) & 0x1) << 7;
+    offset |= ((instr >>  2) & 0x1) << 6;
     return offset;
 }
 
@@ -257,11 +257,12 @@ uint32_t expand_compressed(uint16_t instr) {
                     if (rd == 2) {  /* C.ADDI16SP */
                         /* nzimm[5:0] = inst[12|6|5|4|3], 值 = SignExtend(nzimm) * 16 */
                         uint32_t nzimm = 0;
-                        nzimm |= ((instr >> 12) & 0x1) << 9;  /* inst[12] → nzimm[5] → bit 9 */
-                        nzimm |= ((instr >> 6) & 0x1) << 8;   /* inst[6] → nzimm[4] → bit 8 */
-                        nzimm |= ((instr >> 5) & 0x1) << 7;   /* inst[5] → nzimm[3] → bit 7 */
-                        nzimm |= ((instr >> 4) & 0x1) << 6;   /* inst[4] → nzimm[2] → bit 6 */
-                        nzimm |= ((instr >> 3) & 0x1) << 5;   /* inst[3] → nzimm[1] → bit 5 */
+                        nzimm |= ((instr >> 12) & 0x1) << 9;
+                        nzimm |= ((instr >>  6) & 0x1) << 4;
+                        nzimm |= ((instr >>  5) & 0x1) << 6;
+                        nzimm |= ((instr >>  4) & 0x1) << 8;
+                        nzimm |= ((instr >>  3) & 0x1) << 7;
+                        nzimm |= ((instr >>  2) & 0x1) << 5;
                         /* nzimm[0] = 0 → bit 4 固定为 0 */
                         if (nzimm & 0x200) nzimm |= 0xFFFFFC00;  /* 符号扩展 bit 9 */
                         return make_i_type(OP_OP_IMM, 2, 0, 2, nzimm);
