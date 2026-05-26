@@ -107,31 +107,31 @@ int32_t decode_c_b_imm(uint16_t instr) {
 
 /**
  * decode_c_lwsp_imm - 解码 C.LWSP/C.FLWSP 立即数
- * uimm[7:2] 编码：instr[12,2,6,5,4,3] → uimm[7,6,5,4,3,2]
+ * uimm[7:2] 编码：inst[12,6,5,4,2,3] → uimm[5,4,3,2,6,7]
  */
 int32_t decode_c_lwsp_imm(uint16_t instr) {
     uint32_t imm = 0;
-    imm |= ((instr >> 3) & 0x1) << 2;   /* instr[3] → uimm[2] */
-    imm |= ((instr >> 4) & 0x1) << 3;   /* instr[4] → uimm[3] */
-    imm |= ((instr >> 5) & 0x1) << 4;   /* instr[5] → uimm[4] */
-    imm |= ((instr >> 6) & 0x1) << 5;   /* instr[6] → uimm[5] */
-    imm |= ((instr >> 2) & 0x1) << 6;   /* instr[2] → uimm[6] */
-    imm |= ((instr >> 12) & 0x1) << 7;  /* instr[12] → uimm[7] */
+    imm |= ((instr >> 4) & 0x1) << 2;   /* inst[4] → uimm[2] */
+    imm |= ((instr >> 5) & 0x1) << 3;   /* inst[5] → uimm[3] */
+    imm |= ((instr >> 6) & 0x1) << 4;   /* inst[6] → uimm[4] */
+    imm |= ((instr >> 12) & 0x1) << 5;  /* inst[12] → uimm[5] */
+    imm |= ((instr >> 2) & 0x1) << 6;   /* inst[3] → uimm[6] */
+    imm |= ((instr >> 3) & 0x1) << 7;   /* inst[2] → uimm[7] */
     return imm;
 }
 
 /**
  * decode_c_swsp_imm - 解码 C.SWSP/C.FSWSP 立即数
- * uimm[7:2] 编码：instr[12,11,9,8,7,6] → uimm[7,6,5,4,3,2]
+ * uimm[7:2] 编码：inst[8,7,12,10,9,8，7] → uimm[7,6,5,4,3,2]
  */
 int32_t decode_c_swsp_imm(uint16_t instr) {
     uint32_t imm = 0;
-    imm |= ((instr >> 6) & 0x1) << 2;   /* instr[6] → uimm[2] */
-    imm |= ((instr >> 7) & 0x1) << 3;   /* instr[7] → uimm[3] */
-    imm |= ((instr >> 8) & 0x1) << 4;   /* instr[8] → uimm[4] */
-    imm |= ((instr >> 9) & 0x1) << 5;   /* instr[9] → uimm[5] */
-    imm |= ((instr >> 11) & 0x1) << 6;  /* instr[11] → uimm[6] */
-    imm |= ((instr >> 12) & 0x1) << 7;  /* instr[12] → uimm[7] */
+    imm |= ((instr >> 9)  & 0x1) << 2;  /* inst[9] → uimm[2] */
+    imm |= ((instr >> 10) & 0x1) << 3;  /* inst[10] → uimm[3] */
+    imm |= ((instr >> 11) & 0x1) << 4;  /* inst[11] → uimm[4] */
+    imm |= ((instr >> 12) & 0x1) << 5;  /* inst[12] → uimm[5] */
+    imm |= ((instr >> 7)  & 0x1) << 6;  /* inst[7] → uimm[6] */
+    imm |= ((instr >> 8)  & 0x1) << 7;  /* inst[8] → uimm[7] */
     return imm;
 }
 
