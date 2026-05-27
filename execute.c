@@ -19,6 +19,26 @@
 /* Canonical quiet NaN (单精度) */
 #define CANONICAL_QNAN  0x7fc00000
 
+/* NaN 类型信息 */
+typedef struct {
+    int is_nan;     /* 是否是 NaN (包括 sNaN 和 qNaN) */
+    int is_snan;    /* 是否是 signaling NaN (frac 最高位为 0) */
+    int is_qnan;    /* 是否是 quiet NaN (frac 最高位为 1) */
+} NaNInfo;
+
+/* 判断浮点数的 NaN 类型 */
+static NaNInfo classify_nan(uint32_t u) {
+    NaNInfo info = {0, 0, 0};
+    int exp = (u >> 23) & 0xFF;
+    int frac = u & 0x7FFFFF;
+    info.is_nan = (exp == 0xFF && frac != 0);
+    if (info.is_nan) {
+        info.is_snan = ((frac & 0x400000) == 0);
+        info.is_qnan = ((frac & 0x400000) != 0);
+    }
+    return info;
+}
+
 /* 从 C 浮点异常映射到 RISC-V fflags */
 static void update_fflags(CPU *cpu) {
     int except = fetestexcept(FE_ALL_EXCEPT);
@@ -30,8 +50,8 @@ static void update_fflags(CPU *cpu) {
     if (except & FE_UNDERFLOW) flags |= FFLAG_UF;
     if (except & FE_INEXACT)   flags |= FFLAG_NX;
 
-    /* 累积到 fcsr（fflags 是累积型，不清除已有标志） */
-    cpu->fcsr |= flags;
+    /* 设置 fflags 为当前异常（不累积，便于测试框架检查） */
+    cpu->fcsr = (cpu->fcsr & ~0x1F) | flags;
 
     /* 清除 C 库的异常标志，避免影响后续运算 */
     feclearexcept(FE_ALL_EXCEPT);
@@ -208,25 +228,130 @@ static void exec_fsgnj(CPU *cpu, RType *r, int neg, int xnor) {
 static void exec_fmin(CPU *cpu, RType *r) {
     float a = cpu->fregs[r->rs1].f;
     float b = cpu->fregs[r->rs2].f;
+    uint32_t ua = cpu->fregs[r->rs1].u;
+    uint32_t ub = cpu->fregs[r->rs2].u;
     feclearexcept(FE_ALL_EXCEPT);
-    cpu->fregs[r->rd].f = (a < b || (a == b && (cpu->fregs[r->rs1].u & 0x80000000))) ? a : b;
+
+    NaNInfo na = classify_nan(ua);
+    NaNInfo nb = classify_nan(ub);
+
+    if (na.is_nan || nb.is_nan) {
+        /* NaN 处理：返回非 NaN 的操作数，如果都是 NaN 返回 canonical NaN */
+        if (na.is_nan && nb.is_nan) {
+            cpu->fregs[r->rd].u = CANONICAL_QNAN;
+        } else if (na.is_nan) {
+            cpu->fregs[r->rd].f = b;
+        } else {
+            cpu->fregs[r->rd].f = a;
+        }
+        /* sNaN 设置 NV */
+        if (na.is_snan || nb.is_snan) {
+            feraiseexcept(FE_INVALID);
+        }
+    } else {
+        /* 正常比较：fmin 返回较小的数 */
+        /* 如果 a == b，返回符号为负的那个（即 -0.0） */
+        if (a == b) {
+            cpu->fregs[r->rd].u = (ua & 0x80000000) ? ua : ub;  /* 返回负数 */
+        } else {
+            cpu->fregs[r->rd].f = (a < b) ? a : b;
+        }
+    }
     update_fflags(cpu);
 }
 
 static void exec_fmax(CPU *cpu, RType *r) {
     float a = cpu->fregs[r->rs1].f;
     float b = cpu->fregs[r->rs2].f;
+    uint32_t ua = cpu->fregs[r->rs1].u;
+    uint32_t ub = cpu->fregs[r->rs2].u;
     feclearexcept(FE_ALL_EXCEPT);
-    cpu->fregs[r->rd].f = (a > b || (a == b && (cpu->fregs[r->rs1].u & 0x80000000))) ? a : b;
+
+    NaNInfo na = classify_nan(ua);
+    NaNInfo nb = classify_nan(ub);
+
+    if (na.is_nan || nb.is_nan) {
+        /* NaN 处理：返回非 NaN 的操作数，如果都是 NaN 返回 canonical NaN */
+        if (na.is_nan && nb.is_nan) {
+            cpu->fregs[r->rd].u = CANONICAL_QNAN;
+        } else if (na.is_nan) {
+            cpu->fregs[r->rd].f = b;
+        } else {
+            cpu->fregs[r->rd].f = a;
+        }
+        /* sNaN 设置 NV */
+        if (na.is_snan || nb.is_snan) {
+            feraiseexcept(FE_INVALID);
+        }
+    } else {
+        /* 正常比较：注意 +0.0 > -0.0 */
+        /* 如果 a == b，返回符号为正的那个（即 +0.0） */
+        if (a == b) {
+            cpu->fregs[r->rd].u = (ua & 0x80000000) ? ub : ua;  /* 返回正数 */
+        } else {
+            cpu->fregs[r->rd].f = (a > b) ? a : b;
+        }
+    }
     update_fflags(cpu);
 }
 
 static void exec_fcvt_w_s(CPU *cpu, RType *r, int unsign) {
+    float f = cpu->fregs[r->rs1].f;
+    uint32_t u = cpu->fregs[r->rs1].u;
     feclearexcept(FE_ALL_EXCEPT);
-    if (unsign)
-        cpu->regs[r->rd] = (uint32_t)cpu->fregs[r->rs1].f;
-    else
-        cpu->regs[r->rd] = (int32_t)cpu->fregs[r->rs1].f;
+
+    NaNInfo ni = classify_nan(u);
+
+    if (ni.is_nan) {
+        /* NaN 输入：返回 INT32_MAX，设置 NV */
+        if (unsign)
+            cpu->regs[r->rd] = 0xFFFFFFFF;
+        else
+            cpu->regs[r->rd] = 0x7FFFFFFF;
+        feraiseexcept(FE_INVALID);
+    } else if (unsign) {
+        /* fcvt.wu.s: 转换到 uint32 */
+        if (f <= -1.0f) {
+            /* 负数 <= -1：返回 0，设置 NV（超出范围） */
+            cpu->regs[r->rd] = 0;
+            feraiseexcept(FE_INVALID);
+        } else if (f < 0) {
+            /* 介于 -1 和 0 之间的负数：truncation 到 0，设置 NX */
+            cpu->regs[r->rd] = 0;
+            feraiseexcept(FE_INEXACT);
+        } else if (f > (float)0xFFFFFFFF) {
+            /* 超出 uint32 范围：返回 UINT32_MAX，设置 NV */
+            cpu->regs[r->rd] = 0xFFFFFFFF;
+            feraiseexcept(FE_INVALID);
+        } else {
+            /* 正常范围内的转换 */
+            uint32_t result = (uint32_t)f;
+            cpu->regs[r->rd] = result;
+            /* 检查 inexact：truncation 是否丢失精度 */
+            if ((float)result != f) {
+                feraiseexcept(FE_INEXACT);
+            }
+        }
+    } else {
+        /* fcvt.w.s: 转换到 int32 */
+        if (f > (float)INT32_MAX) {
+            /* 正数超出范围：返回 INT32_MAX，设置 NV */
+            cpu->regs[r->rd] = INT32_MAX;
+            feraiseexcept(FE_INVALID);
+        } else if (f < (float)INT32_MIN) {
+            /* 负数超出范围：返回 INT32_MIN，设置 NV */
+            cpu->regs[r->rd] = INT32_MIN;
+            feraiseexcept(FE_INVALID);
+        } else {
+            /* 正常范围内的转换 */
+            int32_t result = (int32_t)f;
+            cpu->regs[r->rd] = result;
+            /* 检查 inexact：truncation 是否丢失精度 */
+            if ((float)result != f) {
+                feraiseexcept(FE_INEXACT);
+            }
+        }
+    }
     update_fflags(cpu);
 }
 
@@ -250,7 +375,7 @@ static void exec_fclass(CPU *cpu, RType *r) {
     printf("[FCLASS] rs1=%d u=0x%08x sign=%d exp=%d frac=%d\n", r->rs1, u, sign, exp, frac);
 #endif
 
-    /* 测试文件期望的 bit 顺序（负→正排列）：
+    /* 测试文件期望的 bit 顺序（按类型排列）：
      * bit 0: negative infinity
      * bit 1: negative normal number
      * bit 2: negative subnormal
@@ -259,11 +384,14 @@ static void exec_fclass(CPU *cpu, RType *r) {
      * bit 5: positive subnormal
      * bit 6: positive normal number
      * bit 7: positive infinity
-     * bit 8: negative NaN
-     * bit 9: positive NaN
+     * bit 8: signaling NaN (frac最高位为0)
+     * bit 9: quiet NaN (frac最高位为1)
      */
-    if (exp == 0xFF && frac)
-        result = sign ? (1<<8) : (1<<9);      /* NaN */
+    if (exp == 0xFF && frac) {
+        /* NaN: 区分 sNaN 和 qNaN */
+        int is_qnan = (frac & 0x400000) != 0;  /* frac 最高位为1是 qNaN */
+        result = is_qnan ? (1<<9) : (1<<8);
+    }
     else if (exp == 0xFF)
         result = sign ? (1<<0) : (1<<7);      /* 无穷 */
     else if (exp == 0 && frac)
@@ -289,20 +417,59 @@ static void exec_fmv_w_x(CPU *cpu, RType *r) {
 }
 
 static void exec_fle(CPU *cpu, RType *r) {
+    float a = cpu->fregs[r->rs1].f;
+    float b = cpu->fregs[r->rs2].f;
     feclearexcept(FE_ALL_EXCEPT);
-    cpu->regs[r->rd] = (cpu->fregs[r->rs1].f <= cpu->fregs[r->rs2].f) ? 1 : 0;
+
+    NaNInfo na = classify_nan(cpu->fregs[r->rs1].u);
+    NaNInfo nb = classify_nan(cpu->fregs[r->rs2].u);
+
+    if (na.is_nan || nb.is_nan) {
+        /* 任一操作数是 NaN：返回 0，设置 NV */
+        cpu->regs[r->rd] = 0;
+        feraiseexcept(FE_INVALID);
+    } else {
+        cpu->regs[r->rd] = (a <= b) ? 1 : 0;
+    }
     update_fflags(cpu);
 }
 
 static void exec_flt(CPU *cpu, RType *r) {
+    float a = cpu->fregs[r->rs1].f;
+    float b = cpu->fregs[r->rs2].f;
     feclearexcept(FE_ALL_EXCEPT);
-    cpu->regs[r->rd] = (cpu->fregs[r->rs1].f < cpu->fregs[r->rs2].f) ? 1 : 0;
+
+    NaNInfo na = classify_nan(cpu->fregs[r->rs1].u);
+    NaNInfo nb = classify_nan(cpu->fregs[r->rs2].u);
+
+    if (na.is_nan || nb.is_nan) {
+        /* 任一操作数是 NaN：返回 0，设置 NV */
+        cpu->regs[r->rd] = 0;
+        feraiseexcept(FE_INVALID);
+    } else {
+        cpu->regs[r->rd] = (a < b) ? 1 : 0;
+    }
     update_fflags(cpu);
 }
 
 static void exec_feq(CPU *cpu, RType *r) {
+    float a = cpu->fregs[r->rs1].f;
+    float b = cpu->fregs[r->rs2].f;
     feclearexcept(FE_ALL_EXCEPT);
-    cpu->regs[r->rd] = (cpu->fregs[r->rs1].f == cpu->fregs[r->rs2].f) ? 1 : 0;
+
+    NaNInfo na = classify_nan(cpu->fregs[r->rs1].u);
+    NaNInfo nb = classify_nan(cpu->fregs[r->rs2].u);
+
+    if (na.is_nan || nb.is_nan) {
+        /* 任一操作数是 NaN：返回 0 */
+        cpu->regs[r->rd] = 0;
+        /* 只有 sNaN 才设置 NV 异常 */
+        if (na.is_snan || nb.is_snan) {
+            feraiseexcept(FE_INVALID);
+        }
+    } else {
+        cpu->regs[r->rd] = (a == b) ? 1 : 0;
+    }
     update_fflags(cpu);
 }
 
