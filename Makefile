@@ -2,7 +2,7 @@
 # 模块化版本：取指、译码、执行、写回分离
 
 CC = gcc
-CFLAGS = -Wall -Wextra -O2 -std=c99
+CFLAGS = -Wall -Wextra -O0 -std=c99
 LDFLAGS = -lm
 
 # 目标文件
@@ -30,7 +30,7 @@ $(TARGET): $(OBJS)
 
 # 清理
 clean:
-	del -Q $(TARGET) output\*.o
+	del -Q $(TARGET) output\*.o  *.o
 
 # 运行测试
 run: $(TARGET)

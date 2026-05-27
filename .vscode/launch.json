@@ -11,7 +11,7 @@
             "request": "launch",
             "program": "${workspaceFolder}/rv_sim.exe",
 
-            "args":["../proj_test/output/out.bin"],
+            "args":["tests/proj_test/output/out.bin"],
 
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",

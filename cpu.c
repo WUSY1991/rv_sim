@@ -16,7 +16,6 @@ extern void cpu_dump(CPU *cpu);
 void printv1(uint8_t *buf, uint32_t len, char *s)
 {
     uint32_t i = 0;
-    uint32_t n = 0;
     printf("%s:", s);
     for (i = 0; i < len; i++)
     {
@@ -84,17 +83,17 @@ void cpu_init(CPU *cpu) {
     /* x0 硬连线为 0 */
     cpu->regs[0] = 0;
 
-    cpu->breakpoint[0] = 0x1000f8c;
+    cpu->breakpoint[0] = 0x10024d8;
     cpu->brkctrl[0] = 0x03;
 
     cpu->breakpoint[1] = 0x1000000;
-    cpu->brkctrl[1] = 0x03;
+    cpu->brkctrl[1] = 0x00;
 
     cpu->breakpoint[2] = 0x1feb8;
-    cpu->brkctrl[2] = 0x01;
+    cpu->brkctrl[2] = 0x00;
 
     cpu->breakpoint[3] = 0x1feb8;
-    cpu->brkctrl[3] = 0x02;
+    cpu->brkctrl[3] = 0x00;
 }
 
 /**
@@ -156,7 +155,7 @@ int cpu_load_binary(CPU *cpu, const char *filename) {
     int ret = mem_load_program(cpu, prog, size, IMEM_BASE_ADDR);
     free(prog);
 
-    printf("load binary 0x%x bytes\n", size);
+    printf("load binary 0x%1lx bytes\n", size);
     // printv((uint8_t*)cpu->imem, size, "imem");
 
     return ret;

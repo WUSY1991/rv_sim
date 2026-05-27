@@ -1048,9 +1048,9 @@ float_test:
   TEST_FP_OP2_S(307,  fdiv.s, 0x04, -0, 3.14159265,  -Inf);
   TEST_FP_OP2_S(308,  fdiv.s, 0   , qNaNf, NaN, NaN );
 
-  TEST_FP_OP2_S(320,  fadd.s, 0x10,  qNaNf,  3.14159265,  NaN);
-  TEST_FP_OP2_S(321,  fadd.s, 0x10,  qNaNf,  NaN,         3.14159265);
-  TEST_FP_OP2_S(322,  fadd.s, 0x10,  qNaNf,  NaN,         NaN);
+  TEST_FP_OP2_S(320,  fadd.s, 0x00,  qNaNf,  3.14159265,  NaN);
+  TEST_FP_OP2_S(321,  fadd.s, 0x00,  qNaNf,  NaN,         3.14159265);
+  TEST_FP_OP2_S(322,  fadd.s, 0x00,  qNaNf,  NaN,         NaN);
   TEST_FP_OP2_S(323,  fadd.s, 0x10,  qNaNf,  sNaNf,       3.14159265);
   TEST_FP_OP2_S(324,  fadd.s, 0x10,  qNaNf,  3.14159265,  sNaNf);
   TEST_FP_OP2_S(325,  fadd.s, 0x00,  Inf,    Inf,         3.14159265);

@@ -13,6 +13,7 @@ RV_sim/
 ├── execute.c      # 执行模块 (所有指令的执行逻辑)
 ├── writeback.c    # 写回模块 (寄存器/内存写回)
 ├── main.c         # 主程序入口
+├── mem.c
 ├── test_fpu.c     # FPU 测试程序生成器
 ├── Makefile       # 构建脚本
 ├── README.md      # 本文档
@@ -26,19 +27,20 @@ RV_sim/
 
 ### 模块职责
 
-| 模块 | 职责 |
-|------|------|
-| `cpu.h` | 定义 `CPU` 结构体 (包含所有寄存器、内存、状态)，指令类型定义，常量定义 |
-| `cpu.c` | CPU 初始化、程序加载、运行循环、状态打印 |
-| `fetch.c` | 从内存中取指令，检查 PC 对齐和边界 |
-| `decode.c` | 将 32 位指令解析为 R/I/S/R4 型结构，提取操作码/寄存器/立即数 |
-| `execute.c` | 所有指令的执行逻辑 (整数/浮点/乘除/原子/分支跳转) |
-| `writeback.c` | 统一的寄存器/内存写回接口 |
-| `main.c` | 命令行参数解析、测试程序定义 |
+| 模块            | 职责                                                                     |
+| --------------- | ------------------------------------------------------------------------ |
+| `cpu.h`       | 定义 `CPU` 结构体 (包含所有寄存器、内存、状态)，指令类型定义，常量定义 |
+| `cpu.c`       | CPU 初始化、程序加载、运行循环、状态打印                                 |
+| `fetch.c`     | 从内存中取指令，检查 PC 对齐和边界                                       |
+| `decode.c`    | 将 32 位指令解析为 R/I/S/R4 型结构，提取操作码/寄存器/立即数             |
+| `execute.c`   | 所有指令的执行逻辑 (整数/浮点/乘除/原子/分支跳转)                        |
+| `writeback.c` | 统一的寄存器/内存写回接口                                                |
+| `main.c`      | 命令行参数解析、测试程序定义                                             |
 
 ## 支持的指令集
 
 ### I - 基础整数指令
+
 - 算术：`ADD`, `SUB`, `ADDI`
 - 逻辑：`AND`, `OR`, `XOR`, `ANDI`, `ORI`, `XORI`
 - 移位：`SLL`, `SRL`, `SRA`, `SLLI`, `SRLI`, `SRAI`
@@ -49,15 +51,18 @@ RV_sim/
 - 系统：`ECALL`
 
 ### M - 乘除扩展
+
 - `MUL`, `MULH`, `MULHSU`, `MULHU`
 - `DIV`, `DIVU`, `REM`, `REMU`
 
 ### A - 原子操作扩展
+
 - `LR.W`, `SC.W`
 - `AMOSWAP.W`, `AMOADD.W`, `AMOXOR.W`, `AMOAND.W`, `AMOOR.W`
 - `AMOMIN.W`, `AMOMAX.W`, `AMOMINU.W`, `AMOMAXU.W`
 
 ### F - 单精度浮点扩展
+
 - 算术：`FADD.S`, `FSUB.S`, `FMUL.S`, `FDIV.S`, `FSQRT.S`
 - 融合乘加：`FMADD.S`, `FMSUB.S`, `FNMSUB.S`, `FNMADD.S`
 - 符号操作：`FSGNJ.S`, `FSGNJN.S`, `FSGNJX.S`
