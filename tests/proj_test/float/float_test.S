@@ -449,6 +449,7 @@ test_ ## testnum: \
 #define nqNaNf 0f:ffc00000
 #define qNaNf 0f:7fc00000
 #define sNaNf 0f:7f800001
+#define NaN  qNaNf
 #define qNaN 0d:7ff8000000000000
 #define sNaN 0d:7ff0000000000001
 ///////////////////////////origin funct//////////////////////////////////////////////////////////
@@ -1048,9 +1049,9 @@ float_test:
   TEST_FP_OP2_S(307,  fdiv.s, 0x04, -0, 3.14159265,  -Inf);
   TEST_FP_OP2_S(308,  fdiv.s, 0   , qNaNf, NaN, NaN );
 
-  TEST_FP_OP2_S(320,  fadd.s, 0x00,  qNaNf,  3.14159265,  NaN);
-  TEST_FP_OP2_S(321,  fadd.s, 0x00,  qNaNf,  NaN,         3.14159265);
-  TEST_FP_OP2_S(322,  fadd.s, 0x00,  qNaNf,  NaN,         NaN);
+  TEST_FP_OP2_S(320,  fadd.s, 0x00,  qNaNf,  3.14159265,  NaN);         //Todo NV flag = 0
+  TEST_FP_OP2_S(321,  fadd.s, 0x00,  qNaNf,  NaN,         3.14159265);  //Todo NV flag = 0
+  TEST_FP_OP2_S(322,  fadd.s, 0x00,  qNaNf,  NaN,         NaN);         //Todo NV flag = 0
   TEST_FP_OP2_S(323,  fadd.s, 0x10,  qNaNf,  sNaNf,       3.14159265);
   TEST_FP_OP2_S(324,  fadd.s, 0x10,  qNaNf,  3.14159265,  sNaNf);
   TEST_FP_OP2_S(325,  fadd.s, 0x00,  Inf,    Inf,         3.14159265);
@@ -1061,13 +1062,13 @@ float_test:
   TEST_FP_OP2_S(330,  fadd.s, 0x00,  Inf,    Inf,         Inf);
   TEST_FP_OP2_S(331,  fadd.s, 0x00, -Inf,   -Inf,        -Inf);
   TEST_FP_OP2_S(332,  fadd.s, 0x10, nqNaNf, -Inf,         Inf);
-  TEST_FP_OP2_S(333,  fadd.s, 0x11,  0f:7e38cba9,       3.14159265,  0f:7e38cba9);
-  TEST_FP_OP2_S(334,  fadd.s, 0x11,  0f:7e38cba9,       0f:7e38cba9, 3.14159265);
-  TEST_FP_OP2_S(335,  fadd.s, 0x10,  0f:7eb8cba9,       0f:7e38cba9, 0f:7e38cba9);
+  TEST_FP_OP2_S(333,  fadd.s, 0x01,  0f:7e38cba9,       3.14159265,  0f:7e38cba9); //Todo NV flag = 0
+  TEST_FP_OP2_S(334,  fadd.s, 0x01,  0f:7e38cba9,       0f:7e38cba9, 3.14159265);  //Todo NV flag = 0
+  TEST_FP_OP2_S(335,  fadd.s, 0x00,  0f:7eb8cba9,       0f:7e38cba9, 0f:7e38cba9);
 
-  TEST_FP_OP2_S(340,  fsub.s, 0x10,  qNaNf,  2.5,         NaN);
-  TEST_FP_OP2_S(341,  fsub.s, 0x10,  qNaNf,  NaN,         NaN);
-  TEST_FP_OP2_S(342,  fsub.s, 0x10,  qNaNf,  NaN,         NaN);
+  TEST_FP_OP2_S(340,  fsub.s, 0x00,  qNaNf,  2.5,         NaN); //Todo NV flag = 0
+  TEST_FP_OP2_S(341,  fsub.s, 0x00,  qNaNf,  NaN,         NaN); //Todo NV flag = 0
+  TEST_FP_OP2_S(342,  fsub.s, 0x00,  qNaNf,  NaN,         NaN); //Todo NV flag = 0
   TEST_FP_OP2_S(343,  fsub.s, 0x10,  qNaNf,  sNaNf,       2.5);
   TEST_FP_OP2_S(344,  fsub.s, 0x10,  qNaNf,  2.5,         sNaNf);
   TEST_FP_OP2_S(345,  fsub.s, 0x00,  Inf,    Inf,         3.14159265);
@@ -1078,13 +1079,13 @@ float_test:
   TEST_FP_OP2_S(350,  fsub.s, 0x10,  qNaNf,  Inf,         Inf);
   TEST_FP_OP2_S(351,  fsub.s, 0x10, nqNaNf, -Inf,        -Inf);
   TEST_FP_OP2_S(352,  fsub.s, 0x00, -Inf,   -Inf,         Inf);
-  TEST_FP_OP2_S(353,  fsub.s, 0x11,  0f:fe38cba9,       3.14159265,  0f:7e38cba9);
-  TEST_FP_OP2_S(354,  fsub.s, 0x11,  0f:7e38cba8,       0f:7e38cba9, 3.14159265);
-  TEST_FP_OP2_S(355,  fsub.s, 0x00,  0f:80000000,       0f:7e38cba9, 0f:7e38cba9);
+  TEST_FP_OP2_S(353,  fsub.s, 0x01,  0f:fe38cba9,       3.14159265,  0f:7e38cba9);  //Todo NV flag = 0
+  TEST_FP_OP2_S(354,  fsub.s, 0x01,  0f:7e38cba9,       0f:7e38cba9, 3.14159265);   //Todo NV flag = 0
+  TEST_FP_OP2_S(355,  fsub.s, 0x00,  0f:00000000,       0f:7e38cba9, 0f:7e38cba9);
 
-  TEST_FP_OP2_S(360,  fmul.s, 0x10,   qNaNf, 2.5,         NaN);
-  TEST_FP_OP2_S(361,  fmul.s, 0x10,   qNaNf, NaN,         NaN);
-  TEST_FP_OP2_S(362,  fmul.s, 0x10,   qNaNf, NaN,         NaN);
+  TEST_FP_OP2_S(360,  fmul.s, 0x00,   qNaNf, 2.5,         NaN);//Todo NV flag = 0
+  TEST_FP_OP2_S(361,  fmul.s, 0x00,   qNaNf, NaN,         NaN);//Todo NV flag = 0
+  TEST_FP_OP2_S(362,  fmul.s, 0x00,   qNaNf, NaN,         NaN);//Todo NV flag = 0
   TEST_FP_OP2_S(363,  fmul.s, 0x10,   qNaNf, sNaNf,       2.5);
   TEST_FP_OP2_S(364,  fmul.s, 0x10,   qNaNf, 2.5,         sNaNf);
   TEST_FP_OP2_S(365,  fmul.s, 0x00,   Inf,   Inf,         3.14159265);
@@ -1095,17 +1096,17 @@ float_test:
   TEST_FP_OP2_S(370,  fmul.s, 0x00,   Inf,   Inf,         Inf);
   TEST_FP_OP2_S(371,  fmul.s, 0x00,   Inf,  -Inf,        -Inf);
   TEST_FP_OP2_S(372,  fmul.s, 0x00,  -Inf,  -Inf,         Inf);
-  TEST_FP_OP2_S(373,  fmul.s, 0x10,  0f:7e38cba9,       1.0,         0f:7e38cba9);
-  TEST_FP_OP2_S(374,  fmul.s, 0x10,  0f:7e38cba9,       0f:7e38cba9, 1.0        );
+  TEST_FP_OP2_S(373,  fmul.s, 0x00,  0f:7e38cba9,       1.0,         0f:7e38cba9);//Todo NV flag = 0
+  TEST_FP_OP2_S(374,  fmul.s, 0x00,  0f:7e38cba9,       0f:7e38cba9, 1.0        );//Todo NV flag = 0
 # TEST_FP_OP2_S(375,  fmul.s, 0x10,  0f:7f7fffff,       0f:7e38cba9, 0f:7e38cba9); //ToDo
 
-  TEST_FP_OP3_S(380,  fmadd.s, 0x10,   qNaNf, 2.5,         2.5,        NaN      );
-  TEST_FP_OP3_S(381,  fmadd.s, 0x10,   qNaNf, 2.5,         NaN,        3.1415926);
-  TEST_FP_OP3_S(382,  fmadd.s, 0x10,   qNaNf, NaN,         2.5,        3.1415926);
-  TEST_FP_OP3_S(383,  fmadd.s, 0x10,   qNaNf, 2.5,         NaN,        NaN      );
-  TEST_FP_OP3_S(384,  fmadd.s, 0x10,   qNaNf, NaN,         NaN,        3.1415926);
-  TEST_FP_OP3_S(385,  fmadd.s, 0x10,   qNaNf, NaN,         2.5,        NaN      );
-  TEST_FP_OP3_S(386,  fmadd.s, 0x10,   qNaNf, NaN,         NaN,        NaN      );
+  TEST_FP_OP3_S(380,  fmadd.s, 0x00,   qNaNf, 2.5,         2.5,        NaN      ); //Todo NV flag = 0
+  TEST_FP_OP3_S(381,  fmadd.s, 0x00,   qNaNf, 2.5,         NaN,        3.1415926); //Todo NV flag = 0
+  TEST_FP_OP3_S(382,  fmadd.s, 0x00,   qNaNf, NaN,         2.5,        3.1415926); //Todo NV flag = 0
+  TEST_FP_OP3_S(383,  fmadd.s, 0x00,   qNaNf, 2.5,         NaN,        NaN      ); //Todo NV flag = 0
+  TEST_FP_OP3_S(384,  fmadd.s, 0x00,   qNaNf, NaN,         NaN,        3.1415926); //Todo NV flag = 0
+  TEST_FP_OP3_S(385,  fmadd.s, 0x00,   qNaNf, NaN,         2.5,        NaN      ); //Todo NV flag = 0
+  TEST_FP_OP3_S(386,  fmadd.s, 0x00,   qNaNf, NaN,         NaN,        NaN      ); //Todo NV flag = 0
   TEST_FP_OP3_S(390,  fmadd.s, 0x00,   Inf,   2.5,         2.5,        Inf      );
   TEST_FP_OP3_S(391,  fmadd.s, 0x00,   Inf,   2.5,         Inf,        3.1415926);
   TEST_FP_OP3_S(392,  fmadd.s, 0x00,   Inf,   Inf,         2.5,        3.1415926);
@@ -1121,19 +1122,19 @@ float_test:
   TEST_FP_OP3_S(405,  fmadd.s, 0x00,  -Inf,  -Inf,         2.5,       -Inf      );
   TEST_FP_OP3_S(406,  fmadd.s, 0x10,  qNaNf, -Inf,        -Inf,       -Inf      );
   TEST_FP_OP3_S(407,  fmadd.s, 0x10,  qNaNf,  2.5,         Inf,       -Inf      );
-  TEST_FP_OP3_S(410,  fmadd.s, 0x11,  0f:7e38cba9,       1.0,         0f:7e38cba9,   1.0        );
-  TEST_FP_OP3_S(411,  fmadd.s, 0x11,  0f:7e38cba9,       0f:7e38cba9, 1.0,           1.0        );
-  TEST_FP_OP3_S(412,  fmadd.s, 0x11,  0f:7e38cba9,       1.0,         1.0,           0f:7e38cba9);
+  TEST_FP_OP3_S(410,  fmadd.s, 0x01,  0f:7e38cba9,       1.0,         0f:7e38cba9,   1.0        );//Todo NV flag = 0
+  TEST_FP_OP3_S(411,  fmadd.s, 0x01,  0f:7e38cba9,       0f:7e38cba9, 1.0,           1.0        );//Todo NV flag = 0
+  TEST_FP_OP3_S(412,  fmadd.s, 0x01,  0f:7e38cba9,       1.0,         1.0,           0f:7e38cba9);//Todo NV flag = 0
 
 
 
-  TEST_FP_OP3_S(420,  fmsub.s,0x10,   qNaNf, 2.5,         2.5,        NaN      );
-  TEST_FP_OP3_S(421,  fmsub.s,0x10,   qNaNf, 2.5,         NaN,        3.1415926);
-  TEST_FP_OP3_S(422,  fmsub.s,0x10,   qNaNf, NaN,         2.5,        3.1415926);
-  TEST_FP_OP3_S(423,  fmsub.s,0x10,   qNaNf, 2.5,         NaN,        NaN      );
-  TEST_FP_OP3_S(424,  fmsub.s,0x10,   qNaNf, NaN,         NaN,        3.1415926);
-  TEST_FP_OP3_S(425,  fmsub.s,0x10,   qNaNf, NaN,         2.5,        NaN      );
-  TEST_FP_OP3_S(426,  fmsub.s,0x10,   qNaNf, NaN,         NaN,        NaN      );
+  TEST_FP_OP3_S(420,  fmsub.s,0x00,   qNaNf, 2.5,         2.5,        NaN      );//Todo NV flag = 0
+  TEST_FP_OP3_S(421,  fmsub.s,0x00,   qNaNf, 2.5,         NaN,        3.1415926);//Todo NV flag = 0
+  TEST_FP_OP3_S(422,  fmsub.s,0x00,   qNaNf, NaN,         2.5,        3.1415926);//Todo NV flag = 0
+  TEST_FP_OP3_S(423,  fmsub.s,0x00,   qNaNf, 2.5,         NaN,        NaN      );//Todo NV flag = 0
+  TEST_FP_OP3_S(424,  fmsub.s,0x00,   qNaNf, NaN,         NaN,        3.1415926);//Todo NV flag = 0
+  TEST_FP_OP3_S(425,  fmsub.s,0x00,   qNaNf, NaN,         2.5,        NaN      );//Todo NV flag = 0
+  TEST_FP_OP3_S(426,  fmsub.s,0x00,   qNaNf, NaN,         NaN,        NaN      );//Todo NV flag = 0
   TEST_FP_OP3_S(430,  fmsub.s,0x00,  -Inf,   2.5,         2.5,        Inf      );
   TEST_FP_OP3_S(431,  fmsub.s,0x00,   Inf,   2.5,         Inf,        3.1415926);
   TEST_FP_OP3_S(432,  fmsub.s,0x00,   Inf,   Inf,         2.5,        3.1415926);
@@ -1149,17 +1150,17 @@ float_test:
   TEST_FP_OP3_S(445,  fmsub.s,0x10,  nqNaNf,-Inf,         2.5,       -Inf      );
   TEST_FP_OP3_S(446,  fmsub.s,0x00,   Inf,  -Inf,        -Inf,       -Inf      );
   TEST_FP_OP3_S(447,  fmsub.s,0x00,   Inf,   2.5,         Inf,       -Inf      );
-  TEST_FP_OP3_S(450,  fmsub.s,0x11,  0f:7e38cba8,       1.0,         0f:7e38cba9,   1.0        );
-  TEST_FP_OP3_S(451,  fmsub.s,0x11,  0f:7e38cba8,       0f:7e38cba9, 1.0,           1.0        );
-  TEST_FP_OP3_S(452,  fmsub.s,0x11,  0f:fe38cba9,       1.0,         1.0,           0f:7e38cba9);
+  TEST_FP_OP3_S(450,  fmsub.s,0x01,  0f:7e38cba9,       1.0,         0f:7e38cba9,   1.0        );
+  TEST_FP_OP3_S(451,  fmsub.s,0x01,  0f:7e38cba9,       0f:7e38cba9, 1.0,           1.0        );
+  TEST_FP_OP3_S(452,  fmsub.s,0x01,  0f:fe38cba9,       1.0,         1.0,           0f:7e38cba9);
 
-  TEST_FP_OP3_S(460,  fnmadd.s,0x10,   qNaNf, 2.5,         2.5,        NaN      );
-  TEST_FP_OP3_S(461,  fnmadd.s,0x10,  nqNaNf, 2.5,         NaN,        3.1415926);
-  TEST_FP_OP3_S(462,  fnmadd.s,0x10,  nqNaNf, NaN,         2.5,        3.1415926);
-  TEST_FP_OP3_S(463,  fnmadd.s,0x10,   qNaNf, 2.5,         NaN,        NaN      );
-  TEST_FP_OP3_S(464,  fnmadd.s,0x10,  nqNaNf, NaN,         NaN,        3.1415926);
-  TEST_FP_OP3_S(465,  fnmadd.s,0x10,   qNaNf, NaN,         2.5,        NaN      );
-  TEST_FP_OP3_S(466,  fnmadd.s,0x10,   qNaNf, NaN,         NaN,        NaN      );
+  TEST_FP_OP3_S(460,  fnmadd.s,0x00,   qNaNf, 2.5,         2.5,        NaN      );//Todo NV flag = 0
+  TEST_FP_OP3_S(461,  fnmadd.s,0x00,   qNaNf, 2.5,         NaN,        3.1415926);//Todo NV flag = 0
+  TEST_FP_OP3_S(462,  fnmadd.s,0x00,   qNaNf, NaN,         2.5,        3.1415926);//Todo NV flag = 0
+  TEST_FP_OP3_S(463,  fnmadd.s,0x00,   qNaNf, 2.5,         NaN,        NaN      );//Todo NV flag = 0
+  TEST_FP_OP3_S(464,  fnmadd.s,0x00,   qNaNf, NaN,         NaN,        3.1415926);//Todo NV flag = 0
+  TEST_FP_OP3_S(465,  fnmadd.s,0x00,   qNaNf, NaN,         2.5,        NaN      );//Todo NV flag = 0
+  TEST_FP_OP3_S(466,  fnmadd.s,0x00,   qNaNf, NaN,         NaN,        NaN      );//Todo NV flag = 0
   TEST_FP_OP3_S(470,  fnmadd.s,0x00,  -Inf,   2.5,         2.5,        Inf      );
   TEST_FP_OP3_S(471,  fnmadd.s,0x00,  -Inf,   2.5,         Inf,        3.1415926);
   TEST_FP_OP3_S(472,  fnmadd.s,0x00,  -Inf,   Inf,         2.5,        3.1415926);
@@ -1175,17 +1176,17 @@ float_test:
   TEST_FP_OP3_S(485,  fnmadd.s,0x00,   Inf,  -Inf,         2.5,       -Inf      );
   TEST_FP_OP3_S(486,  fnmadd.s,0x10,  nqNaNf,-Inf,        -Inf,       -Inf      );
   TEST_FP_OP3_S(487,  fnmadd.s,0x10,  nqNaNf, 2.5,         Inf,       -Inf      );
-  TEST_FP_OP3_S(490,  fnmadd.s,0x11,  0f:fe38cbaa,       1.0,         0f:7e38cba9,   1.0        );
-  TEST_FP_OP3_S(491,  fnmadd.s,0x11,  0f:fe38cbaa,       0f:7e38cba9, 1.0,           1.0        );
-  TEST_FP_OP3_S(492,  fnmadd.s,0x11,  0f:fe38cbaa,       1.0,         1.0,           0f:7e38cba9);
+  TEST_FP_OP3_S(490,  fnmadd.s,0x01,  0f:fe38cba9,       1.0,         0f:7e38cba9,   1.0        );
+  TEST_FP_OP3_S(491,  fnmadd.s,0x01,  0f:fe38cba9,       0f:7e38cba9, 1.0,           1.0        );
+  TEST_FP_OP3_S(492,  fnmadd.s,0x01,  0f:fe38cba9,       1.0,         1.0,           0f:7e38cba9);
 
-  TEST_FP_OP3_S(500,  fnmsub.s,0x10,   qNaNf, 2.5,         2.5,        NaN      );
-  TEST_FP_OP3_S(501,  fnmsub.s,0x10,  nqNaNf, 2.5,         NaN,        3.1415926);
-  TEST_FP_OP3_S(502,  fnmsub.s,0x10,  nqNaNf, NaN,         2.5,        3.1415926);
-  TEST_FP_OP3_S(503,  fnmsub.s,0x10,   qNaNf, 2.5,         NaN,        NaN      );
-  TEST_FP_OP3_S(504,  fnmsub.s,0x10,  nqNaNf, NaN,         NaN,        3.1415926);
-  TEST_FP_OP3_S(505,  fnmsub.s,0x10,   qNaNf, NaN,         2.5,        NaN      );
-  TEST_FP_OP3_S(506,  fnmsub.s,0x10,   qNaNf, NaN,         NaN,        NaN      );
+  TEST_FP_OP3_S(500,  fnmsub.s,0x00,   qNaNf, 2.5,         2.5,        NaN      );//Todo NV flag = 0
+  TEST_FP_OP3_S(501,  fnmsub.s,0x00,   qNaNf, 2.5,         NaN,        3.1415926);//Todo NV flag = 0
+  TEST_FP_OP3_S(502,  fnmsub.s,0x00,   qNaNf, NaN,         2.5,        3.1415926);//Todo NV flag = 0
+  TEST_FP_OP3_S(503,  fnmsub.s,0x00,   qNaNf, 2.5,         NaN,        NaN      );//Todo NV flag = 0
+  TEST_FP_OP3_S(504,  fnmsub.s,0x00,   qNaNf, NaN,         NaN,        3.1415926);//Todo NV flag = 0
+  TEST_FP_OP3_S(505,  fnmsub.s,0x00,   qNaNf, NaN,         2.5,        NaN      );//Todo NV flag = 0
+  TEST_FP_OP3_S(506,  fnmsub.s,0x00,   qNaNf, NaN,         NaN,        NaN      );//Todo NV flag = 0
   TEST_FP_OP3_S(510,  fnmsub.s,0x00,   Inf,   2.5,         2.5,        Inf      );
   TEST_FP_OP3_S(511,  fnmsub.s,0x00,  -Inf,   2.5,         Inf,        3.1415926);
   TEST_FP_OP3_S(512,  fnmsub.s,0x00,  -Inf,   Inf,         2.5,        3.1415926);
@@ -1201,9 +1202,9 @@ float_test:
   TEST_FP_OP3_S(525,  fnmsub.s,0x10,   qNaNf,-Inf,         2.5,       -Inf      );
   TEST_FP_OP3_S(526,  fnmsub.s,0x00,  -Inf,  -Inf,        -Inf,       -Inf      );
   TEST_FP_OP3_S(527,  fnmsub.s,0x00,  -Inf,   2.5,         Inf,       -Inf      );
-  TEST_FP_OP3_S(530,  fnmsub.s,0x11,  0f:fe38cba9,        1.0,         0f:7e38cba9,   1.0        );
-  TEST_FP_OP3_S(531,  fnmsub.s,0x11,  0f:fe38cba9,        0f:7e38cba9, 1.0,           1.0        );
-  TEST_FP_OP3_S(532,  fnmsub.s,0x11,  0f:7e38cba8,        1.0,         1.0,           0f:7e38cba9);
+  TEST_FP_OP3_S(530,  fnmsub.s,0x01,  0f:fe38cba9,        1.0,         0f:7e38cba9,   1.0        );
+  TEST_FP_OP3_S(531,  fnmsub.s,0x01,  0f:fe38cba9,        0f:7e38cba9, 1.0,           1.0        );
+  TEST_FP_OP3_S(532,  fnmsub.s,0x01,  0f:7e38cba9,        1.0,         1.0,           0f:7e38cba9);
 
   TEST_PASSFAIL
 
