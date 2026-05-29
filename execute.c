@@ -142,18 +142,6 @@ static void update_fflags(CPU *cpu) {
     feclearexcept(FE_ALL_EXCEPT);
 }
 
-/* 检查浮点运算的输入NaN，返回是否需要特殊处理
- * has_nan: 是否有NaN输入
- * has_snan: 是否有sNaN输入（用于设置NV标志）
- */
-static int check_input_nan(uint32_t ua, uint32_t ub, int *has_nan, int *has_snan) {
-    NaNInfo na = classify_nan(ua);
-    NaNInfo nb = classify_nan(ub);
-    *has_nan = na.is_nan || nb.is_nan;
-    *has_snan = na.is_snan || nb.is_snan;
-    return *has_nan;
-}
-
 /* 检查并修正无效操作的结果为 canonical NaN */
 static void fix_nan_result(CPU *cpu, int rd) {
     int except = fetestexcept(FE_INVALID);
@@ -166,6 +154,242 @@ static void fix_nan_result(CPU *cpu, int rd) {
             cpu->fregs[rd].u = CANONICAL_QNAN;
         }
     }
+}
+
+/* ==================== 公共浮点运算函数 ==================== */
+/* 用于 exec_fadd/fsub/fmul/fdiv 和 fmadd/fmsub/fnmadd/fnmadd 共享 */
+
+/* 浮点运算结果结构体 */
+typedef struct {
+    uint32_t result;   /* 运算结果 */
+    int has_nv;        /* 需要设置 NV 标志 */
+    int has_dz;        /* 需要设置 DZ 标志 */
+    int has_of;        /* 需要设置 OF 标志 */
+} FloatOpResult;
+
+/* 公共浮点加法: a + b */
+static FloatOpResult float_do_add(uint32_t ua, uint32_t ub) {
+    FloatOpResult res = {CANONICAL_QNAN, 0, 0, 0};
+    FloatInfo fa = classify_float(ua);
+    FloatInfo fb = classify_float(ub);
+
+    /* NaN 输入检查 */
+    if (fa.is_nan || fb.is_nan) {
+        res.has_nv = fa.is_snan || fb.is_snan;
+        return res;
+    }
+
+    /* Inf 特殊情况: Inf + (-Inf) = NaN + NV */
+    if (check_inf_add_sub(fa, fb, 0)) {
+        res.result = fa.sign ? 0xFFC00000 : 0x7FC00000;
+        res.has_nv = 1;
+        return res;
+    }
+
+    /* Inf + Inf (同号) = Inf (不产生异常) */
+    if (fa.is_inf && fb.is_inf) {
+        /* 同号Inf相加，结果符号与操作数相同 */
+        res.result = fa.sign ? 0xFF800000 : 0x7F800000;
+        return res;
+    }
+
+    /* Inf + finite = Inf (不产生异常) */
+    if (fa.is_inf) {
+        res.result = fa.sign ? 0xFF800000 : 0x7F800000;
+        return res;
+    }
+    if (fb.is_inf) {
+        res.result = fb.sign ? 0xFF800000 : 0x7F800000;
+        return res;
+    }
+
+    /* 正常运算 */
+    float a = *(float*)&ua;
+    float b = *(float*)&ub;
+    float r = a + b;
+    res.result = *(uint32_t*)&r;
+
+    /* 检查 C 库异常 */
+    if (fetestexcept(FE_INVALID)) {
+        FloatInfo fres = classify_float(res.result);
+        if (fres.is_nan) {
+            res.result = fa.sign ? 0xFFC00000 : 0x7FC00000;
+            res.has_nv = 1;
+        }
+    }
+    if (fetestexcept(FE_OVERFLOW)) res.has_of = 1;
+
+    return res;
+}
+
+/* 公共浮点减法: a - b */
+static FloatOpResult float_do_sub(uint32_t ua, uint32_t ub) {
+    FloatOpResult res = {CANONICAL_QNAN, 0, 0, 0};
+    FloatInfo fa = classify_float(ua);
+    FloatInfo fb = classify_float(ub);
+
+    /* NaN 输入检查 */
+    if (fa.is_nan || fb.is_nan) {
+        res.has_nv = fa.is_snan || fb.is_snan;
+        return res;
+    }
+
+    /* Inf 特殊情况: Inf - Inf (同号) = NaN + NV */
+    if (check_inf_add_sub(fa, fb, 1)) {
+        res.result = fa.sign ? 0xFFC00000 : 0x7FC00000;
+        res.has_nv = 1;
+        return res;
+    }
+
+    /* Inf - Inf (不同号) = Inf (不产生异常) */
+    if (fa.is_inf && fb.is_inf) {
+        /* 不同号Inf相减，结果为第一个操作数的符号 */
+        res.result = fa.sign ? 0xFF800000 : 0x7F800000;
+        return res;
+    }
+
+    /* Inf - finite = Inf (不产生异常) */
+    if (fa.is_inf) {
+        res.result = fa.sign ? 0xFF800000 : 0x7F800000;
+        return res;
+    }
+
+    /* finite - Inf = -Inf (不产生异常) */
+    if (fb.is_inf) {
+        res.result = fb.sign ? 0x7F800000 : 0xFF800000;  /* 取负 */
+        return res;
+    }
+
+    /* 正常运算 */
+    float a = *(float*)&ua;
+    float b = *(float*)&ub;
+    float r = a - b;
+    res.result = *(uint32_t*)&r;
+
+    /* 检查 C 库异常 */
+    if (fetestexcept(FE_INVALID)) {
+        FloatInfo fres = classify_float(res.result);
+        if (fres.is_nan) {
+            res.result = fa.sign ? 0xFFC00000 : 0x7FC00000;
+            res.has_nv = 1;
+        }
+    }
+    if (fetestexcept(FE_OVERFLOW)) res.has_of = 1;
+
+    return res;
+}
+
+/* 公共浮点乘法: a * b */
+static FloatOpResult float_do_mul(uint32_t ua, uint32_t ub) {
+    FloatOpResult res = {CANONICAL_QNAN, 0, 0, 0};
+    FloatInfo fa = classify_float(ua);
+    FloatInfo fb = classify_float(ub);
+
+    /* NaN 输入检查 */
+    if (fa.is_nan || fb.is_nan) {
+        res.has_nv = fa.is_snan || fb.is_snan;
+        return res;
+    }
+
+    /* Inf 特殊情况: 0 * Inf = NaN + NV */
+    if (check_inf_mul(fa, fb)) {
+        res.has_nv = 1;
+        return res;
+    }
+
+    /* finite * Inf = Inf (不产生异常) */
+    if ((fa.is_inf && !fb.is_nan && !fb.is_inf) ||
+        (fb.is_inf && !fa.is_nan && !fa.is_inf)) {
+        int result_sign = fa.sign ^ fb.sign;
+        res.result = result_sign ? 0xFF800000 : 0x7F800000;
+        return res;  /* 不设置 NV 或 OF */
+    }
+
+    /* Inf * Inf = Inf (不产生异常) */
+    if (fa.is_inf && fb.is_inf) {
+        int result_sign = fa.sign ^ fb.sign;
+        res.result = result_sign ? 0xFF800000 : 0x7F800000;
+        return res;
+    }
+
+    /* 正常运算 */
+    float a = *(float*)&ua;
+    float b = *(float*)&ub;
+    float r = a * b;
+    res.result = *(uint32_t*)&r;
+
+    /* 检查 C 库异常 */
+    if (fetestexcept(FE_INVALID)) {
+        FloatInfo fres = classify_float(res.result);
+        if (fres.is_nan) {
+            res.result = (fa.sign ^ fb.sign) ? 0xFFC00000 : 0x7FC00000;
+            res.has_nv = 1;
+        }
+    }
+    if (fetestexcept(FE_OVERFLOW)) res.has_of = 1;
+
+    return res;
+}
+
+/* 公共浮点除法: a / b */
+static FloatOpResult float_do_div(uint32_t ua, uint32_t ub) {
+    FloatOpResult res = {CANONICAL_QNAN, 0, 0, 0};
+    FloatInfo fa = classify_float(ua);
+    FloatInfo fb = classify_float(ub);
+
+    /* NaN 输入检查 */
+    if (fa.is_nan || fb.is_nan) {
+        res.has_nv = fa.is_snan || fb.is_snan;
+        return res;
+    }
+
+    /* Inf 特殊情况检查 */
+    int div_case = check_inf_div(fa, fb);
+    if (div_case == 1) {
+        /* Inf/Inf 或 0/0 = NaN + NV */
+        res.has_nv = 1;
+        return res;
+    } else if (div_case == 2) {
+        /* finite / 0 = Inf + DZ */
+        int result_sign = fa.sign ^ fb.sign;
+        res.result = result_sign ? 0xFF800000 : 0x7F800000;
+        res.has_dz = 1;
+        return res;
+    } else if (div_case == 3) {
+        /* Inf / finite = Inf + OF, 或 finite / Inf = 0 + OF */
+        int result_sign = fa.sign ^ fb.sign;
+        if (fa.is_inf) {
+            res.result = result_sign ? 0xFF800000 : 0x7F800000;
+        } else {
+            res.result = result_sign ? 0x80000000 : 0x00000000;
+        }
+        res.has_of = 1;
+        return res;
+    }
+
+    /* 正常运算 */
+    float a = *(float*)&ua;
+    float b = *(float*)&ub;
+    float r = a / b;
+    res.result = *(uint32_t*)&r;
+
+    /* 检查 C 库异常 */
+    if (fetestexcept(FE_INVALID)) {
+        FloatInfo fres = classify_float(res.result);
+        if (fres.is_nan) {
+            res.result = fa.sign ? 0xFFC00000 : 0x7FC00000;
+            res.has_nv = 1;
+        }
+    }
+    if (fetestexcept(FE_DIVBYZERO)) res.has_dz = 1;
+    if (fetestexcept(FE_OVERFLOW)) res.has_of = 1;
+
+    return res;
+}
+
+/* 翻转浮点数符号位 */
+static uint32_t float_flip_sign(uint32_t u) {
+    return u ^ 0x80000000;
 }
 
 /* 外部函数声明 */
@@ -288,113 +512,49 @@ static void exec_amo(CPU *cpu, RType *r, uint32_t funct5) {
 static void exec_fadd(CPU *cpu, RType *r) {
     uint32_t ua = cpu->fregs[r->rs1].u;
     uint32_t ub = cpu->fregs[r->rs2].u;
-    int has_nan, has_snan;
     feclearexcept(FE_ALL_EXCEPT);
 
-    if (check_input_nan(ua, ub, &has_nan, &has_snan)) {
-        cpu->fregs[r->rd].u = CANONICAL_QNAN;
-        if (has_snan) feraiseexcept(FE_INVALID);  /* 只有sNaN才设置NV */
-    } else {
-        FloatInfo fa = classify_float(ua);
-        FloatInfo fb = classify_float(ub);
-        if (check_inf_add_sub(fa, fb, 0)) {
-            /* Inf + (-Inf) = NaN + NV，结果符号与第一个操作数相同 */
-            cpu->fregs[r->rd].u = fa.sign ? 0xFFC00000 : 0x7FC00000;
-            feraiseexcept(FE_INVALID);
-        } else {
-            cpu->fregs[r->rd].f = cpu->fregs[r->rs1].f + cpu->fregs[r->rs2].f;
-            fix_nan_result(cpu, r->rd);
-        }
-    }
+    FloatOpResult res = float_do_add(ua, ub);
+    cpu->fregs[r->rd].u = res.result;
+    if (res.has_nv) feraiseexcept(FE_INVALID);
+    if (res.has_of) feraiseexcept(FE_OVERFLOW);
     update_fflags(cpu);
 }
 
 static void exec_fsub(CPU *cpu, RType *r) {
     uint32_t ua = cpu->fregs[r->rs1].u;
     uint32_t ub = cpu->fregs[r->rs2].u;
-    int has_nan, has_snan;
     feclearexcept(FE_ALL_EXCEPT);
 
-    if (check_input_nan(ua, ub, &has_nan, &has_snan)) {
-        cpu->fregs[r->rd].u = CANONICAL_QNAN;
-        if (has_snan) feraiseexcept(FE_INVALID);  /* 只有sNaN才设置NV */
-    } else {
-        FloatInfo fa = classify_float(ua);
-        FloatInfo fb = classify_float(ub);
-        if (check_inf_add_sub(fa, fb, 1)) {
-            /* Inf - Inf (同号) = NaN + NV，结果符号与第一个操作数相同 */
-            cpu->fregs[r->rd].u = fa.sign ? 0xFFC00000 : 0x7FC00000;
-            feraiseexcept(FE_INVALID);
-        } else {
-            cpu->fregs[r->rd].f = cpu->fregs[r->rs1].f - cpu->fregs[r->rs2].f;
-            fix_nan_result(cpu, r->rd);
-        }
-    }
+    FloatOpResult res = float_do_sub(ua, ub);
+    cpu->fregs[r->rd].u = res.result;
+    if (res.has_nv) feraiseexcept(FE_INVALID);
+    if (res.has_of) feraiseexcept(FE_OVERFLOW);
     update_fflags(cpu);
 }
 
 static void exec_fmul(CPU *cpu, RType *r) {
     uint32_t ua = cpu->fregs[r->rs1].u;
     uint32_t ub = cpu->fregs[r->rs2].u;
-    int has_nan, has_snan;
     feclearexcept(FE_ALL_EXCEPT);
 
-    if (check_input_nan(ua, ub, &has_nan, &has_snan)) {
-        cpu->fregs[r->rd].u = CANONICAL_QNAN;
-        if (has_snan) feraiseexcept(FE_INVALID);  /* 只有sNaN才设置NV */
-    } else {
-        FloatInfo fa = classify_float(ua);
-        FloatInfo fb = classify_float(ub);
-        if (check_inf_mul(fa, fb)) {
-            /* 0 * Inf = NaN + NV */
-            cpu->fregs[r->rd].u = CANONICAL_QNAN;
-            feraiseexcept(FE_INVALID);
-        } else {
-            cpu->fregs[r->rd].f = cpu->fregs[r->rs1].f * cpu->fregs[r->rs2].f;
-            fix_nan_result(cpu, r->rd);
-        }
-    }
+    FloatOpResult res = float_do_mul(ua, ub);
+    cpu->fregs[r->rd].u = res.result;
+    if (res.has_nv) feraiseexcept(FE_INVALID);
+    if (res.has_of) feraiseexcept(FE_OVERFLOW);
     update_fflags(cpu);
 }
 
 static void exec_fdiv(CPU *cpu, RType *r) {
     uint32_t ua = cpu->fregs[r->rs1].u;
     uint32_t ub = cpu->fregs[r->rs2].u;
-    int has_nan, has_snan;
     feclearexcept(FE_ALL_EXCEPT);
 
-    if (check_input_nan(ua, ub, &has_nan, &has_snan)) {
-        cpu->fregs[r->rd].u = CANONICAL_QNAN;
-        if (has_snan) feraiseexcept(FE_INVALID);  /* 只有sNaN才设置NV */
-    } else {
-        FloatInfo fa = classify_float(ua);
-        FloatInfo fb = classify_float(ub);
-        int div_case = check_inf_div(fa, fb);
-        if (div_case == 1) {
-            /* Inf/Inf 或 0/0 = NaN + NV */
-            cpu->fregs[r->rd].u = CANONICAL_QNAN;
-            feraiseexcept(FE_INVALID);
-        } else if (div_case == 2) {
-            /* finite / 0 = Inf + DZ */
-            uint32_t result = (fa.sign ^ fb.sign) ? 0xFF800000 : 0x7F800000;
-            cpu->fregs[r->rd].u = result;
-            feraiseexcept(FE_DIVBYZERO);
-        } else if (div_case == 3) {
-            /* Inf / finite = Inf + OF, 或 finite / Inf = 0 + OF */
-            int result_sign = fa.sign ^ fb.sign;
-            if (fa.is_inf) {
-                /* Inf / finite = Inf */
-                cpu->fregs[r->rd].u = result_sign ? 0xFF800000 : 0x7F800000;
-            } else {
-                /* finite / Inf = 0 (逐渐下溢) */
-                cpu->fregs[r->rd].u = result_sign ? 0x80000000 : 0x00000000;
-            }
-            feraiseexcept(FE_OVERFLOW);
-        } else {
-            cpu->fregs[r->rd].f = cpu->fregs[r->rs1].f / cpu->fregs[r->rs2].f;
-            fix_nan_result(cpu, r->rd);
-        }
-    }
+    FloatOpResult res = float_do_div(ua, ub);
+    cpu->fregs[r->rd].u = res.result;
+    if (res.has_nv) feraiseexcept(FE_INVALID);
+    if (res.has_dz) feraiseexcept(FE_DIVBYZERO);
+    if (res.has_of) feraiseexcept(FE_OVERFLOW);
     update_fflags(cpu);
 }
 
@@ -701,7 +861,6 @@ static void csr_write(CPU *cpu, uint32_t csr_addr, uint32_t value) {
 static void exec_csrrw(CPU *cpu, uint32_t rd, uint32_t rs1, uint32_t csr_addr) {
     uint32_t old_val = csr_read(cpu, csr_addr);
     /* 注意：此项目使用的 fsflags 指令实现为 CSRRW，且当 rs1=0 时需要清除 CSR */
-    /* 标准 RISC-V 规范：rs1=0 时只读不写，但此测试项目需要清除行为 */
     csr_write(cpu, csr_addr, cpu->regs[rs1]);  /* rs1=0 时写入 0，清除 CSR */
     if (rd != 0) {
         cpu->regs[rd] = old_val;
@@ -755,181 +914,88 @@ static void exec_csrrci(CPU *cpu, uint32_t rd, uint32_t uimm, uint32_t csr_addr)
 
 /* F 扩展融合乘加 (rs2 字段实际是 rs3) */
 static void exec_fmadd(CPU *cpu, RType *r) {
+    /* fmadd = rs1 * rs2 + rs3 */
     uint32_t ua = cpu->fregs[r->rs1].u;
     uint32_t ub = cpu->fregs[r->rs2].u;
     uint32_t uc = cpu->fregs[(r->funct7 >> 2) & 0x1F].u;
-    int has_nan, has_snan;
     feclearexcept(FE_ALL_EXCEPT);
 
-    if (check_input_nan(ua, ub, &has_nan, &has_snan) || classify_nan(uc).is_nan) {
-        NaNInfo nc = classify_nan(uc);
-        cpu->fregs[r->rd].u = CANONICAL_QNAN;
-        if (has_snan || nc.is_snan) feraiseexcept(FE_INVALID);  /* 只有sNaN才设置NV */
-    } else {
-        FloatInfo fa = classify_float(ua);
-        FloatInfo fb = classify_float(ub);
-        FloatInfo fc = classify_float(uc);
+    /* 第一步：乘法 rs1 * rs2 */
+    FloatOpResult mul_res = float_do_mul(ua, ub);
 
-        /* 检查乘法特殊情况：0 * Inf */
-        if (check_inf_mul(fa, fb)) {
-            cpu->fregs[r->rd].u = CANONICAL_QNAN;
-            feraiseexcept(FE_INVALID);
-        }
-        /* 检查加法特殊情况：Inf + (-Inf) */
-        else if (fa.is_inf && fb.is_inf) {
-            /* 乘法结果为 Inf，检查与 fc 相加 */
-            int mul_sign = fa.sign ^ fb.sign;
-            FloatInfo mul_result = {0, 0, 0, 1, 0, mul_sign};
-            if (check_inf_add_sub(mul_result, fc, 0)) {
-                cpu->fregs[r->rd].u = CANONICAL_QNAN;
-                feraiseexcept(FE_INVALID);
-            } else {
-                cpu->fregs[r->rd].f = cpu->fregs[r->rs1].f * cpu->fregs[r->rs2].f + cpu->fregs[(r->funct7 >> 2) & 0x1F].f;
-                fix_nan_result(cpu, r->rd);
-            }
-        }
-        else if (fc.is_inf && !fa.is_inf && !fb.is_inf) {
-            /* fc 是 Inf，乘法结果有限，直接相加正常 */
-            cpu->fregs[r->rd].f = cpu->fregs[r->rs1].f * cpu->fregs[r->rs2].f + cpu->fregs[(r->funct7 >> 2) & 0x1F].f;
-            fix_nan_result(cpu, r->rd);
-        }
-        else {
-            cpu->fregs[r->rd].f = cpu->fregs[r->rs1].f * cpu->fregs[r->rs2].f + cpu->fregs[(r->funct7 >> 2) & 0x1F].f;
-            fix_nan_result(cpu, r->rd);
-        }
-    }
+    /* 第二步：加法 mul_result + rs3 */
+    FloatOpResult add_res = float_do_add(mul_res.result, uc);
+
+    cpu->fregs[r->rd].u = add_res.result;
+    if (mul_res.has_nv || add_res.has_nv) feraiseexcept(FE_INVALID);
+    if (mul_res.has_of || add_res.has_of) feraiseexcept(FE_OVERFLOW);
     update_fflags(cpu);
 }
 
 static void exec_fmsub(CPU *cpu, RType *r) {
+    /* fmsub = rs1 * rs2 - rs3 */
     uint32_t ua = cpu->fregs[r->rs1].u;
     uint32_t ub = cpu->fregs[r->rs2].u;
     uint32_t uc = cpu->fregs[(r->funct7 >> 2) & 0x1F].u;
-    int has_nan, has_snan;
     feclearexcept(FE_ALL_EXCEPT);
 
-    if (check_input_nan(ua, ub, &has_nan, &has_snan) || classify_nan(uc).is_nan) {
-        NaNInfo nc = classify_nan(uc);
-        cpu->fregs[r->rd].u = CANONICAL_QNAN;
-        if (has_snan || nc.is_snan) feraiseexcept(FE_INVALID);  /* 只有sNaN才设置NV */
-    } else {
-        FloatInfo fa = classify_float(ua);
-        FloatInfo fb = classify_float(ub);
-        FloatInfo fc = classify_float(uc);
+    /* 第一步：乘法 rs1 * rs2 */
+    FloatOpResult mul_res = float_do_mul(ua, ub);
 
-        /* 检查乘法特殊情况：0 * Inf */
-        if (check_inf_mul(fa, fb)) {
-            cpu->fregs[r->rd].u = CANONICAL_QNAN;
-            feraiseexcept(FE_INVALID);
-        }
-        /* 检查减法特殊情况：Inf - Inf (同号) */
-        else if (fa.is_inf && fb.is_inf) {
-            int mul_sign = fa.sign ^ fb.sign;
-            FloatInfo mul_result = {0, 0, 0, 1, 0, mul_sign};
-            if (check_inf_add_sub(mul_result, fc, 1)) {
-                cpu->fregs[r->rd].u = CANONICAL_QNAN;
-                feraiseexcept(FE_INVALID);
-            } else {
-                cpu->fregs[r->rd].f = cpu->fregs[r->rs1].f * cpu->fregs[r->rs2].f - cpu->fregs[(r->funct7 >> 2) & 0x1F].f;
-                fix_nan_result(cpu, r->rd);
-            }
-        }
-        else {
-            cpu->fregs[r->rd].f = cpu->fregs[r->rs1].f * cpu->fregs[r->rs2].f - cpu->fregs[(r->funct7 >> 2) & 0x1F].f;
-            fix_nan_result(cpu, r->rd);
-        }
-    }
+    /* 第二步：减法 mul_result - rs3 */
+    FloatOpResult sub_res = float_do_sub(mul_res.result, uc);
+
+    cpu->fregs[r->rd].u = sub_res.result;
+    if (mul_res.has_nv || sub_res.has_nv) feraiseexcept(FE_INVALID);
+    if (mul_res.has_of || sub_res.has_of) feraiseexcept(FE_OVERFLOW);
     update_fflags(cpu);
 }
 
 static void exec_fnmsub(CPU *cpu, RType *r) {
+    /* fnmsub = -(rs1 * rs2 - rs3) = -mul_result + rs3 */
     uint32_t ua = cpu->fregs[r->rs1].u;
     uint32_t ub = cpu->fregs[r->rs2].u;
     uint32_t uc = cpu->fregs[(r->funct7 >> 2) & 0x1F].u;
-    int has_nan, has_snan;
     feclearexcept(FE_ALL_EXCEPT);
 
-    if (check_input_nan(ua, ub, &has_nan, &has_snan) || classify_nan(uc).is_nan) {
-        NaNInfo nc = classify_nan(uc);
-        cpu->fregs[r->rd].u = CANONICAL_QNAN;
-        if (has_snan || nc.is_snan) feraiseexcept(FE_INVALID);  /* 只有sNaN才设置NV */
-    } else {
-        FloatInfo fa = classify_float(ua);
-        FloatInfo fb = classify_float(ub);
-        FloatInfo fc = classify_float(uc);
+    /* 第一步：乘法 rs1 * rs2 */
+    FloatOpResult mul_res = float_do_mul(ua, ub);
 
-        /* fnmsub = -(rs1 * rs2 - rs3) = -mul_result + rs3 */
-        /* 检查乘法特殊情况：0 * Inf */
-        if (check_inf_mul(fa, fb)) {
-            cpu->fregs[r->rd].u = CANONICAL_QNAN;
-            feraiseexcept(FE_INVALID);
-        }
-        /* 检查：如果乘法结果是Inf，减去rs3后取负 */
-        else if (fa.is_inf && fb.is_inf) {
-            int mul_sign = fa.sign ^ fb.sign;
-            /* mul_result - fc，然后取负：等同于 (-mul_result) + fc */
-            FloatInfo neg_mul = {0, 0, 0, 1, 0, !mul_sign};
-            if (check_inf_add_sub(neg_mul, fc, 0)) {
-                cpu->fregs[r->rd].u = CANONICAL_QNAN;
-                feraiseexcept(FE_INVALID);
-            } else {
-                cpu->fregs[r->rd].f = -(cpu->fregs[r->rs1].f * cpu->fregs[r->rs2].f - cpu->fregs[(r->funct7 >> 2) & 0x1F].f);
-                fix_nan_result(cpu, r->rd);
-            }
-        }
-        else {
-            cpu->fregs[r->rd].f = -(cpu->fregs[r->rs1].f * cpu->fregs[r->rs2].f - cpu->fregs[(r->funct7 >> 2) & 0x1F].f);
-            fix_nan_result(cpu, r->rd);
-        }
-    }
+    /* 取负：翻转符号位 */
+    uint32_t neg_mul = float_flip_sign(mul_res.result);
+
+    /* 第二步：加法 -mul_result + rs3 */
+    FloatOpResult add_res = float_do_add(neg_mul, uc);
+
+    cpu->fregs[r->rd].u = add_res.result;
+    if (mul_res.has_nv || add_res.has_nv) feraiseexcept(FE_INVALID);
+    if (mul_res.has_of || add_res.has_of) feraiseexcept(FE_OVERFLOW);
     update_fflags(cpu);
 }
 
 static void exec_fnmadd(CPU *cpu, RType *r) {
+    /* fnmadd = -(rs1 * rs2 + rs3) = -mul_result - rs3 */
     uint32_t ua = cpu->fregs[r->rs1].u;
     uint32_t ub = cpu->fregs[r->rs2].u;
     uint32_t uc = cpu->fregs[(r->funct7 >> 2) & 0x1F].u;
-    int has_nan, has_snan;
     feclearexcept(FE_ALL_EXCEPT);
 
-    if (check_input_nan(ua, ub, &has_nan, &has_snan) || classify_nan(uc).is_nan) {
-        NaNInfo nc = classify_nan(uc);
-        cpu->fregs[r->rd].u = CANONICAL_QNAN;
-        if (has_snan || nc.is_snan) feraiseexcept(FE_INVALID);  /* 只有sNaN才设置NV */
-    } else {
-        FloatInfo fa = classify_float(ua);
-        FloatInfo fb = classify_float(ub);
-        FloatInfo fc = classify_float(uc);
+    /* 第一步：乘法 rs1 * rs2 */
+    FloatOpResult mul_res = float_do_mul(ua, ub);
 
-        /* fnmadd = -(rs1 * rs2 + rs3) = -mul_result - rs3 */
-        /* 检查乘法特殊情况：0 * Inf */
-        if (check_inf_mul(fa, fb)) {
-            cpu->fregs[r->rd].u = CANONICAL_QNAN;
-            feraiseexcept(FE_INVALID);
-        }
-        /* 检查：如果乘法结果是Inf，加上rs3后取负 */
-        else if (fa.is_inf && fb.is_inf) {
-            int mul_sign = fa.sign ^ fb.sign;
-            /* mul_result + fc，然后取负：等同于 (-mul_result) - fc */
-            FloatInfo neg_mul = {0, 0, 0, 1, 0, !mul_sign};
-            if (check_inf_add_sub(neg_mul, fc, 1)) {
-                cpu->fregs[r->rd].u = CANONICAL_QNAN;
-                feraiseexcept(FE_INVALID);
-            } else {
-                cpu->fregs[r->rd].f = -(cpu->fregs[r->rs1].f * cpu->fregs[r->rs2].f + cpu->fregs[(r->funct7 >> 2) & 0x1F].f);
-                fix_nan_result(cpu, r->rd);
-            }
-        }
-        else {
-            cpu->fregs[r->rd].f = -(cpu->fregs[r->rs1].f * cpu->fregs[r->rs2].f + cpu->fregs[(r->funct7 >> 2) & 0x1F].f);
-            fix_nan_result(cpu, r->rd);
-        }
-    }
+    /* 取负：翻转符号位 */
+    uint32_t neg_mul = float_flip_sign(mul_res.result);
+
+    /* 第二步：减法 -mul_result - rs3 */
+    FloatOpResult sub_res = float_do_sub(neg_mul, uc);
+
+    cpu->fregs[r->rd].u = sub_res.result;
+    if (mul_res.has_nv || sub_res.has_nv) feraiseexcept(FE_INVALID);
+    if (mul_res.has_of || sub_res.has_of) feraiseexcept(FE_OVERFLOW);
     update_fflags(cpu);
 }
 
 /* ==================== 基础整数运算 ==================== */
-
 static void exec_add(CPU *cpu, RType *r) {
     cpu->regs[r->rd] = cpu->regs[r->rs1] + cpu->regs[r->rs2];
 }

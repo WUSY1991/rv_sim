@@ -83,7 +83,7 @@ void cpu_init(CPU *cpu) {
     /* x0 硬连线为 0 */
     cpu->regs[0] = 0;
 
-    cpu->breakpoint[0] = 0x10024d8;
+    cpu->breakpoint[0] = 0x100380c;
     cpu->brkctrl[0] = 0x03;
 
     cpu->breakpoint[1] = 0x1000000;
